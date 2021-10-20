@@ -64,6 +64,7 @@ jobs:
           | jq -r '.[]')
         if [ "${token:0:1}" == "[" ]; then
           IMAGE_VERSION="null"
+          LS_VERSION="ls1"
         else
           multidigest=$(curl -s \
             --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
@@ -84,7 +85,6 @@ jobs:
           IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
           LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
           LS_VERSION="ls-$(( $LS_VERSION+1 ))"
-          echo "**** LS_VERSION set to $LS_VERSION ****"
 
           if [ -z "${IMAGE_VERSION}" ]; then
             echo "**** Can't retrieve last pushed version, exiting ****"
@@ -101,6 +101,7 @@ jobs:
         fi
 
         echo "**** Version ${EXT_RELEASE} has not been pushed, releasing ****"
+        echo "**** LS_VERSION set to $LS_VERSION ****"
         echo ::set-output name=update_available::true
         IMAGE_RELEASE=${EXT_RELEASE}
         echo ::set-output name=image_release::${IMAGE_RELEASE}
