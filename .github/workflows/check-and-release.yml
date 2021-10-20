@@ -84,6 +84,7 @@ jobs:
           IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
           LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
           LS_VERSION="ls-$(( $LS_VERSION+1 ))"
+          echo "**** LS_VERSION set to $LS_VERSION ****"
 
           if [ -z "${IMAGE_VERSION}" ]; then
             echo "**** Can't retrieve last pushed version, exiting ****"
@@ -119,6 +120,7 @@ jobs:
         id: gen_tags
         run: |
           TAG_NAME="${{ needs.check.outputs.image_release }}-${{ needs.check.outputs.ls_version }}"
+          echo "**** Setting release tag to $TAG_NAME ****"          
           echo ::set-output name=tag_name::${TAG_NAME}
       - 
         name: Do release
