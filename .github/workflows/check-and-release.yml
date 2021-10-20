@@ -69,6 +69,7 @@ jobs:
           | jq -r '.[]')
         if [ "${token:0:1}" == "[" ]; then
           IMAGE_VERSION="null"
+          LS_VERSION="ls1"
         else
           multidigest=$(curl -s \
             --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
@@ -86,7 +87,9 @@ jobs:
             | jq -r '.config')
 
           IMAGE_RELEASE=$(echo ${image_info} | jq -r '.Labels."org.opencontainers.image.version"')
-          IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-spad' '{print $1}')
+          IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
+          LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
+          LS_VERSION="ls$(( $LS_VERSION+1 ))"
 
           if [ -z "${IMAGE_VERSION}" ]; then
             echo "**** Can't retrieve last pushed version, exiting ****"
