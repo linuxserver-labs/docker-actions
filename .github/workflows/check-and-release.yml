@@ -64,7 +64,7 @@ jobs:
 
         image="${{ inputs.repo_owner }}/${{ inputs.app_name }}"
         tag="latest"
-        token=$(curl -sX GET \
+        token=$(curl -s \
           "https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull" \
           | jq -r '.[]')
         if [ "${token:0:1}" == "[" ]; then
