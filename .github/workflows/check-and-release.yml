@@ -118,5 +118,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           body: "* Updated ${{ needs.check.outputs.app_name }} to ${{ needs.check.outputs.image_release }}"
-          token: ${{ secrets.repo_scoped_token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ needs.check.outputs.image_release }}-ls$(($LS_VERSION+1))
