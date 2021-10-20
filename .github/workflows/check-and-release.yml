@@ -89,7 +89,7 @@ jobs:
           IMAGE_RELEASE=$(echo ${image_info} | jq -r '.Labels."org.opencontainers.image.version"')
           IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
           LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
-          LS_VERSION="ls-$(( $LS_VERSION+1 ))"
+          LS_VERSION="ls$(( $LS_VERSION+1 ))"
 
           if [ -z "${IMAGE_VERSION}" ]; then
             echo "**** Can't retrieve last pushed version, exiting ****"
