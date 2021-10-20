@@ -1,0 +1,122 @@
+name: Check for update and release
+
+on:
+  workflow_call:
+    inputs:
+      repo_owner:
+        required: true
+        type: string
+      app_name:
+        required: true
+        type: string
+      release_type:
+        required: true
+        type: string      
+      release_url:
+        required: false
+        type: string
+      release_name:
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[ci-skip]')"
+    outputs:
+      image_release: ${{ steps.build_check.outputs.image_release }}
+      ls_version: ${{ steps.build_check.outputs.ls_version }}
+      update_available: ${{ steps.build_check.outputs.update_available }}
+      app_name: ${{ steps.build_check.outputs.app_name }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    
+    - name: Check if we should release
+      id: build_check
+      run: |
+        echo "**** Retrieving external version ****"
+        case ${{ inputs.release_type }} in
+          github)
+            EXT_RELEASE=$(curl -sX GET ${{ inputs.release_url }}/releases/latest | awk '/tag_name/{print $4;exit}' FS='[""]');
+            ;;
+          github_tag)
+            EXT_RELEASE=$(curl -sX GET ${{ inputs.release_url }}/tags | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+            ;;
+          alpine)
+            EXT_RELEASE=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
+            ;;
+        esac      
+        if [ -z "${EXT_RELEASE}" ] || [ "${EXT_RELEASE}" == "null" ]; then
+          echo "**** Can't retrieve external version, exiting ****"
+          exit 1
+        fi
+
+        EXT_RELEASE=$(echo ${EXT_RELEASE} | sed 's/[~,%@+;:/]//g')
+
+        echo "**** External version: ${EXT_RELEASE} ****"
+        echo "**** Retrieving last pushed version ****"
+
+        image="${{ inputs.repo_owner }}/${{ inputs.app_name }}"
+        tag="latest"
+        token=$(curl -sX GET \
+          "https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull" \
+          | jq -r '.[]')
+        if [ "${token:0:1}" == "[" ]; then
+          IMAGE_VERSION="null"
+        else
+          multidigest=$(curl -s \
+            --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            --header "Authorization: Bearer ${token}" \
+            "https://ghcr.io/v2/${image}/manifests/${tag}" \
+            | jq -r 'first(.manifests[].digest)')
+          digest=$(curl -s \
+            --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            --header "Authorization: Bearer ${token}" \
+            "https://ghcr.io/v2/${image}/manifests/${multidigest}" \
+            | jq -r '.config.digest')
+          image_info=$(curl -sL \
+            --header "Authorization: Bearer ${token}" \
+            "https://ghcr.io/v2/${image}/blobs/${digest}" \
+            | jq -r '.config')
+
+          IMAGE_RELEASE=$(echo ${image_info} | jq -r '.Labels."org.opencontainers.image.version"')
+          IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
+          LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}') 
+
+          if [ -z "${IMAGE_VERSION}" ]; then
+            echo "**** Can't retrieve last pushed version, exiting ****"
+            exit 1
+          fi
+        fi
+
+        echo "**** Last pushed version: ${IMAGE_VERSION} ****"
+
+        if [ "${EXT_RELEASE}" == "${IMAGE_VERSION}" ]; then
+          echo "**** Version ${EXT_RELEASE} already pushed, not releasing ****"
+          echo ::set-output name=update_available::false
+          exit 0
+        fi
+
+        echo "**** Version ${EXT_RELEASE} has not been pushed, releasing ****"
+        echo ::set-output name=update_available::true
+        IMAGE_RELEASE=${EXT_RELEASE}
+        echo ::set-output name=image_release::${IMAGE_RELEASE}
+        echo ::set-output name=ls_version::${LS_VERSION}
+        echo ::set-output name=app_name::${{ inputs.app_name }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: check
+    if:  ${{ needs.check.outputs.update_available == 'true' }}
+    steps:  
+      - 
+        name: Checkout
+        uses: actions/checkout@v2.3.5
+      
+      - name: Do release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: "* Updated ${{ needs.check.outputs.app_name }} to ${{ needs.check.outputs.image_release }}"
+          token: ${{ secrets.repo_scoped_token }}
+          tag_name: ${{ needs.check.outputs.image_release }}-ls$(($LS_VERSION+1))
