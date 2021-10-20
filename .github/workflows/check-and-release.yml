@@ -38,13 +38,18 @@ jobs:
         echo "**** Retrieving external version ****"
         case ${{ inputs.release_type }} in
           github)
-            EXT_RELEASE=$(curl -sX GET ${{ inputs.release_url }}/releases/latest | awk '/tag_name/{print $4;exit}' FS='[""]');
+            EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
             ;;
           github_tag)
-            EXT_RELEASE=$(curl -sX GET ${{ inputs.release_url }}/tags | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+            EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
             ;;
           alpine)
             EXT_RELEASE=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
+            ;;
+          script)
+            if test -f "./get-version.sh"; then
+              EXT_RELEASE=$(bash "./get-version.sh");
+            fi
             ;;
         esac      
         if [ -z "${EXT_RELEASE}" ] || [ "${EXT_RELEASE}" == "null" ]; then
