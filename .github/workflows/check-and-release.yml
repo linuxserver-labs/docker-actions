@@ -82,7 +82,8 @@ jobs:
 
           IMAGE_RELEASE=$(echo ${image_info} | jq -r '.Labels."org.opencontainers.image.version"')
           IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
-          LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}') 
+          LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
+          LS_VERSION="ls-$(( $LS_VERSION+1 ))"
 
           if [ -z "${IMAGE_VERSION}" ]; then
             echo "**** Can't retrieve last pushed version, exiting ****"
@@ -113,10 +114,12 @@ jobs:
       - 
         name: Checkout
         uses: actions/checkout@v2.3.5
-      
+      - 
+        name: Generate tags
+        run: LS_VERSION=
       - name: Do release
         uses: softprops/action-gh-release@v1
         with:
           body: "* Updated ${{ needs.check.outputs.app_name }} to ${{ needs.check.outputs.image_release }}"
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ needs.check.outputs.image_release }}-ls$(($LS_VERSION+1))
+          tag_name: ${{ needs.check.outputs.image_release }}-${LS_VERSION}
