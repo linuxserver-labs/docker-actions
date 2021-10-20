@@ -118,7 +118,7 @@ jobs:
         name: Generate release tag
         id: gen_tags
         run: |
-          TAG_NAME="${{ needs.check.outputs.image_release }}-${LS_VERSION}"
+          TAG_NAME="${{ needs.check.outputs.image_release }}-${{ needs.check.outputs.ls_version }}"
           echo ::set-output name=tag_name::${TAG_NAME}
       - 
         name: Do release
