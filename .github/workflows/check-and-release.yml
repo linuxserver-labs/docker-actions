@@ -115,11 +115,15 @@ jobs:
         name: Checkout
         uses: actions/checkout@v2.3.5
       - 
-        name: Generate tags
-        run: LS_VERSION=
-      - name: Do release
+        name: Generate release tag
+        id: gen_tags
+        run: |
+          TAG_NAME="${{ needs.check.outputs.image_release }}-${LS_VERSION}"
+          echo ::set-output name=tag_name::${TAG_NAME}
+      - 
+        name: Do release
         uses: softprops/action-gh-release@v1
         with:
           body: "* Updated ${{ needs.check.outputs.app_name }} to ${{ needs.check.outputs.image_release }}"
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ needs.check.outputs.image_release }}-${LS_VERSION}
+          tag_name: ${{ steps.gen_tags.outputs.tag_name }}
