@@ -62,8 +62,8 @@ jobs:
           files: |
             ./docker-bake.hcl
             ${{ steps.docker_meta.outputs.bake-file }}
-          build-args: |
-            BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
-            VERSION=${{ github.event.release.tag_name }}            
+          set: |
+            image.args.BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
+            image.args.VERSION=${{ github.event.release.tag_name }}            
           targets: image-all
           push: true
