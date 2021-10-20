@@ -41,6 +41,13 @@ jobs:
           registry: ghcr.io
           username: ${{ inputs.repo_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - 
+        name: Generate build date
+        id: gen_date
+        run: |
+          BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
+          echo "**** Setting build date to $BUILD_DATE ****"          
+          echo ::set-output name=build_date::${BUILD_DATE}
       -
         name: Build and push
         uses: docker/bake-action@v1.6.0
@@ -49,7 +56,7 @@ jobs:
             ./docker-bake.hcl
             ${{ steps.docker_meta.outputs.bake-file }}
           set: |
-            image.args.BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
+            image.args.BUILD_DATE=${{ steps.gen_date.outputs.build_date }}
             image.args.VERSION=${{ github.event.release.tag_name }}            
           targets: image-all
           push: true
