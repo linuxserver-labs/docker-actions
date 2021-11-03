@@ -30,7 +30,7 @@ jobs:
       app_name: ${{ steps.build_check.outputs.app_name }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v2.4.0
     
     - name: Check if we should release
       id: build_check
@@ -128,7 +128,7 @@ jobs:
     steps:  
       - 
         name: Checkout
-        uses: actions/checkout@v2.3.5
+        uses: actions/checkout@v2.4.0
       - 
         name: Generate release tag
         id: gen_tags
