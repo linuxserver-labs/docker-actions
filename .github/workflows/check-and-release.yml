@@ -18,6 +18,9 @@ on:
       release_name:
         required: false
         type: string
+    secrets:
+      repo_release_token:
+        required: true        
 
 jobs:
   check:
@@ -141,5 +144,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           body: "* Updated ${{ needs.check.outputs.app_name }} to ${{ needs.check.outputs.image_release }}"
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.repo_release_token }}
           tag_name: ${{ steps.gen_tags.outputs.tag_name }}
