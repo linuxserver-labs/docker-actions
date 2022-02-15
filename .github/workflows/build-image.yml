@@ -64,7 +64,7 @@ jobs:
           echo ::set-output name=tag_name::${IMAGE_VERSION}
       -
         name: Build and push
-        uses: docker/bake-action@v1.6.0
+        uses: docker/bake-action@v1.7.0
         with:
           files: |
             ./docker-bake.hcl
