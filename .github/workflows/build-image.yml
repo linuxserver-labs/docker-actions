@@ -69,20 +69,20 @@ jobs:
             if [ -z $IMAGE_VERSION ] || [ $IMAGE_VERSION == null ]; then
               case ${{ inputs.release_type }} in
                 github)
-                  EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
+                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
                   ;;
                 github_commit)
-                  EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}" | | jq -r 'first(.[].sha)' | cut -c1-8);
+                  IMAGE_VERSION=$(curl -sL "${{ inputs.release_url }}" | | jq -r 'first(.[].sha)' | cut -c1-8);
                   ;;
                 github_tag)
-                  EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
                   ;;
                 alpine)
-                  EXT_RELEASE=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
+                  IMAGE_VERSION=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
                   ;;
                 script)
                   if test -f "./get-version.sh"; then
-                    EXT_RELEASE=$(bash "./get-version.sh");
+                    IMAGE_VERSION=$(bash "./get-version.sh");
                   fi
                   ;;
               esac
