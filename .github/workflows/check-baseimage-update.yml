@@ -31,7 +31,7 @@ jobs:
       - name: Fetch release version
         run: |
           curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-          jq 'first(.[] | select(.target_commitish==${{ inputs.basebranch }}))' > release-versions/${{ inputs.baseimage }}-${{ inputs.basebranch }}.txt
+          jq 'first(.[] | select(.target_commitish=="${{ inputs.basebranch }}"))' > release-versions/${{ inputs.baseimage }}-${{ inputs.basebranch }}.txt
       - name: Check for modified files
         id: git-check
         run: echo ::set-output name=modified::$([ -z "`git status --porcelain`" ] && echo "false" || echo "true")
