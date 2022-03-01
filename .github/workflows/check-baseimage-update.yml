@@ -65,7 +65,7 @@ jobs:
         name: Do release
         uses: softprops/action-gh-release@v1
         with:
-          body: "* Updated ${{ inputs.app_name }} with new ${{ inputs.baseimage }} baseimage version"
+          body: "* Updated ${{ inputs.app_name }} with new ${{ inputs.baseimage }} ${{ inputs.basebranch }} version"
           token: ${{ secrets.repo_release_token }}
           tag_name: ${{ steps.gen_tags.outputs.tag_name }}
 
