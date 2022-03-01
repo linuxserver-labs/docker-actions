@@ -30,8 +30,14 @@ jobs:
           token: ${{ secrets.repo_release_token }}
       - name: Fetch release version
         run: |
-          curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-          jq 'first(.[] | select(.target_commitish==${{ inputs.basebranch }}))' > release-versions/${{ inputs.baseimage }}-${{ inputs.basebranch }}.txt
+          BASEVER=$(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
+          jq 'first(.[] | select(.target_commitish==${{ inputs.basebranch }}))')
+          if [ -z "${BASEVER}" ] || [ "${BASEVER}" == "null" ]; then
+            echo $BASEVER > release-versions/${{ inputs.baseimage }}-${{ inputs.basebranch }}.txt
+          elif
+            echo "*** Could not get valid base image version. Check inputs. ***"
+            exit 1
+          fi
       - name: Check for modified files
         id: git-check
         run: echo ::set-output name=modified::$([ -z "`git status --porcelain`" ] && echo "false" || echo "true")
