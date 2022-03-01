@@ -9,6 +9,15 @@ on:
       app_name:
         required: true
         type: string
+      release_type:
+        required: true
+        type: string
+      release_url:
+        required: false
+        type: string
+      release_name:
+        required: false
+        type: string        
     secrets:
       scarf_token:
         required: true          
@@ -56,7 +65,28 @@ jobs:
         id: gen_release
         run: |
           if [ -z ${{ github.event.release.tag_name }} ]; then
-            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | jq -r .tag_name)
+            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | jq -r '(.tag_name)?')
+            if [ -z $IMAGE_VERSION ] || [ $IMAGE_VERSION == null ]; then
+              case ${{ inputs.release_type }} in
+                github)
+                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
+                  ;;
+                github_commit)
+                  IMAGE_VERSION=$(curl -sL "${{ inputs.release_url }}" | | jq -r 'first(.[].sha)' | cut -c1-8);
+                  ;;
+                github_tag)
+                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+                  ;;
+                alpine)
+                  IMAGE_VERSION=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
+                  ;;
+                script)
+                  if test -f "./get-version.sh"; then
+                    IMAGE_VERSION=$(bash "./get-version.sh");
+                  fi
+                  ;;
+              esac
+            fi
           else
             IMAGE_VERSION=${{ github.event.release.tag_name }}
           fi
