@@ -31,7 +31,7 @@ jobs:
       - name: Fetch release version
         run: |
           BASEVER=$(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-          jq 'first(.[] | select(.target_commitish==${{ inputs.basebranch }}))')
+          jq 'first(.[] | select(.target_commitish=="${{ inputs.basebranch }}"))')
           if [ -z "${BASEVER}" ] || [ "${BASEVER}" == "null" ]; then
             echo $BASEVER > release-versions/${{ inputs.baseimage }}-${{ inputs.basebranch }}.txt
           elif
