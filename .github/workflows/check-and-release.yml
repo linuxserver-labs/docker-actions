@@ -44,7 +44,7 @@ jobs:
             EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
             ;;
           github_commit)
-            EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}" | | jq -r 'first(.[].sha)' | cut -c1-8);
+            EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[].sha)' | cut -c1-8);
             ;;
           github_tag)
             EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
