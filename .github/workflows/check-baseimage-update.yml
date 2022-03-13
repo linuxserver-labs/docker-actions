@@ -30,18 +30,22 @@ jobs:
           token: ${{ secrets.repo_release_token }}
       - name: Fetch release version
         run: |
-          curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-          jq 'first(.[] | select(.target_commitish=="${{ inputs.basebranch }}"))' > release-versions/${{ inputs.baseimage }}-${{ inputs.basebranch }}.txt
-      - name: Check for modified files
-        id: git-check
-        run: echo ::set-output name=modified::$([ -z "`git status --porcelain`" ] && echo "false" || echo "true")
-      - name: Commit latest release version
-        if: steps.git-check.outputs.modified == 'true'
-        run: |
-          git config --global user.name '${{ inputs.repo_owner }}'
-          git config --global user.email '<>'
-          git commit -am "New ${{ inputs.baseimage }} base image release version"
-          git push
+          BASEVER=$(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
+          jq -r 'first(.[] | select(.target_commitish=="${{ inputs.basebranch }}").tag_name)')
+          if [ -z "${BASEVER}" ] || [ "${BASEVER}" == "null" ]; then
+            echo "*** Could not get valid base image version. Check inputs. ***"
+            exit 1
+          fi
+          BASETIME=$(date -d $(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
+          jq -r 'first(.[] | select(.target_commitish=="${{ inputs.basebranch }}").published_at)') +%s)
+          RELEASETIME=$(date -d $(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | \
+          jq -r '.published_at') +%s)
+          if [ $BASETIME -le $RELEASETIME ]; then
+            echo "*** Baseimage release is older than latest container release, skipping ***"
+            exit 1
+          else
+            echo ::set-output name=modified::true
+          fi
 
   release:
     runs-on: ubuntu-latest
