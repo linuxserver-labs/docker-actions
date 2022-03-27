@@ -42,7 +42,7 @@ jobs:
           jq -r '.published_at') +%s)
           if [ $BASETIME -le $RELEASETIME ]; then
             echo "*** Baseimage release is older than latest container release, skipping ***"
-            exit 1
+            echo ::set-output name=modified::false
           else
             echo ::set-output name=modified::true
           fi
