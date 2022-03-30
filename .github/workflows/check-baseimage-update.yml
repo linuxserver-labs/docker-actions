@@ -26,25 +26,23 @@ jobs:
       modified: ${{ steps.git-check.outputs.modified }}
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.repo_release_token }}
       - name: Fetch release version
         run: |
           BASEVER=$(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-          jq 'first(.[] | select(.tag_name | startswith("${{ inputs.basebranch }}")).tag_name)')
+            jq 'first(.[] | select(.tag_name | startswith("${{ inputs.basebranch }}")).tag_name)')
           if [ -z "${BASEVER}" ] || [ "${BASEVER}" == "null" ]; then
-            echo "*** Could not get valid base image version. Check inputs. ***"
-            exit 1
+              echo "*** Could not get valid base image version. Check inputs. ***"
+              exit 1
           fi
           BASETIME=$(date -d $(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-          jq -r 'first(.[] | select(.tag_name | startswith("${{ inputs.basebranch }}")).published_at)') +%s)
+            jq -r 'first(.[] | select(.tag_name | startswith("${{ inputs.basebranch }}")).published_at)') +%s)
           RELEASETIME=$(date -d $(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | \
-          jq -r '.published_at') +%s)
+            jq -r '.published_at') +%s)
           if [ $BASETIME -le $RELEASETIME ]; then
-            echo "*** Baseimage release is older than latest container release, skipping ***"
-            echo ::set-output name=modified::false
+              echo "*** Baseimage release is older than latest container release, skipping ***"
+              echo ::set-output name=modified::false
           else
-            echo ::set-output name=modified::true
+              echo ::set-output name=modified::true
           fi
 
   release:
