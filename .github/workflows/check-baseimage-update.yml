@@ -28,14 +28,13 @@ jobs:
       - uses: actions/checkout@v3
       - name: Fetch release version
         run: |
-          BASEVER=$(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-            jq -r 'first(.[] | select(.tag_name | startswith("${{ inputs.basebranch }}")).tag_name)')
-          if [ -z "${BASEVER}" ] || [ "${BASEVER}" == "null" ]; then
+          BASE=$(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases)
+          if [ -z "${BASE}" ] || [ "${BASE}" == "null" ]; then
               echo "*** Could not get valid base image version. Check inputs. ***"
               exit 1
           fi
-          BASETIME=$(date -d $(curl -sL https://api.github.com/repos/linuxserver/docker-baseimage-${{ inputs.baseimage }}/releases | \
-            jq -r 'first(.[] | select(.tag_name | startswith("${{ inputs.basebranch }}")).published_at)') +%s)
+          BASETIME=$(date -d $(echo $BASE | \
+            jq -r 'first(.[] | select(.tag_name | match("(${{ inputs.basebranch }})-[0-9a-z]{8}") | .captures[].string) .published_at)') +%s)
           RELEASETIME=$(date -d $(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | \
             jq -r '.published_at') +%s)
           if [ $BASETIME -le $RELEASETIME ]; then
