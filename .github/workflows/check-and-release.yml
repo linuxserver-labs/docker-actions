@@ -97,7 +97,7 @@ jobs:
                 digest=$(echo $digest | jq -r '.config.digest');
             fi
           fi
-          if [ -z "${digest}" ]; then
+          if [ -z "${digest}" ] || [ "${digest}" == "null" ]; then
             echo "**** Package exists but can't find image tagged latest, releasing ****"
             IMAGE_VERSION="null"
             LS_VERSION="ls1"
