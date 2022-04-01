@@ -3,6 +3,9 @@ name: Build Image On Release
 on:
   workflow_call:
     inputs:
+      target-arch:
+        required: true
+        type: string    
       repo_owner:
         required: true
         type: string
@@ -90,8 +93,10 @@ jobs:
           else
             IMAGE_VERSION=${{ github.event.release.tag_name }}
           fi
+          APP_VERSION=$(echo ${IMAGE_VERSION} | awk -F'-ls' '{print $1}')
           echo "**** Setting release tag to $IMAGE_VERSION ****"
           echo ::set-output name=tag_name::${IMAGE_VERSION}
+          echo ::set-output name=app_version::${APP_VERSION}
       -
         name: Build and push
         uses: docker/bake-action@v1.7.0
@@ -102,7 +107,8 @@ jobs:
           set: |
             image.args.BUILD_DATE=${{ steps.gen_date.outputs.build_date }}
             image.args.VERSION=${IMAGE_VERSION}
-          targets: image-all
+            image.args.APP_VERSION=${{ steps.gen_release.outputs.app_version }}            
+          targets: ${{ inputs.target-arch }}
           push: true
       -
         name: Push to Scarf
