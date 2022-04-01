@@ -83,31 +83,33 @@ jobs:
             "https://ghcr.io/v2/${image}/manifests/${tag}" \
             | jq -r 'first(.manifests[].digest)?')
           if [ -z "${multidigest}" ]; then
-            digest=$(curl -s \
+            if digest=$(curl -s \
               --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
               --header "Authorization: Bearer ${token}" \
-              "https://ghcr.io/v2/${image}/manifests/${tag}" \
-              | jq -r '.config.digest')
+              "https://ghcr.io/v2/${image}/manifests/${tag}" | grep -v 404); then
+                digest=$(echo $digest | jq -r '.config.digest');
+            fi
           else
-            digest=$(curl -s \
+            if digest=$(curl -s \
               --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
               --header "Authorization: Bearer ${token}" \
-              "https://ghcr.io/v2/${image}/manifests/${multidigest}" \
-              | jq -r '.config.digest')
+              "https://ghcr.io/v2/${image}/manifests/${multidigest}" | grep -v 404); then
+                digest=$(echo $digest | jq -r '.config.digest');
+            fi
           fi
-          image_info=$(curl -sL \
-            --header "Authorization: Bearer ${token}" \
-            "https://ghcr.io/v2/${image}/blobs/${digest}" \
-            | jq -r '.config')
-
-          IMAGE_RELEASE=$(echo ${image_info} | jq -r '.Labels."org.opencontainers.image.version"')
-          IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
-          LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
-          LS_VERSION="ls$(( $LS_VERSION+1 ))"
-
-          if [ -z "${IMAGE_VERSION}" ]; then
-            echo "**** Can't retrieve last pushed version, exiting ****"
-            exit 1
+          if [ -z "${digest}" ] || [ "${digest}" == "null" ]; then
+            echo "**** Package exists but can't find image tagged latest, releasing ****"
+            IMAGE_VERSION="null"
+            LS_VERSION="ls1"
+          else
+            image_info=$(curl -sL \
+              --header "Authorization: Bearer ${token}" \
+              "https://ghcr.io/v2/${image}/blobs/${digest}" \
+              | jq -r '.config')
+            IMAGE_RELEASE=$(echo ${image_info} | jq -r '.Labels."org.opencontainers.image.version"')
+            IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
+            LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
+            LS_VERSION="ls$(( $LS_VERSION+1 ))"
           fi
         fi
 
