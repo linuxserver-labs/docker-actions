@@ -35,7 +35,7 @@ jobs:
           fi
           BASETIME=$(date -d $(echo $BASE | \
             jq -r 'first(.[] | select(.tag_name | match("(${{ inputs.basebranch }})-[0-9a-z]{8}") | .captures[].string) .published_at)') +%s)
-          RELEASETIME=$(date -d $(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | \
+          RELEASETIME=$(date -d $(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | \
             jq -r 'first(.[].published_at)') +%s)
           if [ $BASETIME -le $RELEASETIME ]; then
               echo "*** Baseimage release is older than latest container release, skipping ***"
