@@ -6,15 +6,22 @@ on:
       repo_owner:
         required: true
         type: string
+      app_name:
+        required: true
+        type: string        
       baseimage:
         required: true
         type: string
       basebranch:
         required: true
         type: string        
-      app_name:
-        required: true
+      prerelease:
+        required: false
+        type: boolean
+      branch:
+        required: false
         type: string
+        default: main        
     secrets:
       repo_release_token:
         required: true
@@ -61,7 +68,14 @@ jobs:
           LS_VERSION=$(( $(echo $IMAGE_VERSION | awk -NF '-' '{print $NF}' | cut -c 3-8 | sed 's/^0*//')+1 ))
           RELEASE_TAG=$APP_VERSION-ls$(printf $LS_VERSION)
           echo "**** Setting release tag to $RELEASE_TAG ****"
-          echo ::set-output name=tag_name::${RELEASE_TAG} 
+          echo ::set-output name=tag_name::${RELEASE_TAG}
+
+          echo "**** Prerelease type is ${{ inputs.prerelease }}"
+          if ${{ inputs.prerelease }}=='true'; then
+            echo ::set-output name=prerelease::true
+          else
+            echo ::set-output name=prerelease::false
+          fi
       - 
         name: Do release
         uses: softprops/action-gh-release@v1
@@ -69,4 +83,6 @@ jobs:
           body: "* Updated ${{ inputs.app_name }} with new ${{ inputs.baseimage }} ${{ inputs.basebranch }} version"
           token: ${{ secrets.repo_release_token }}
           tag_name: ${{ steps.gen_tags.outputs.tag_name }}
+          prerelease: ${{ steps.gen_tags.outputs.prerelease }}
+          target_commitish: ${{ inputs.branch }}
 
