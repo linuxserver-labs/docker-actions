@@ -21,6 +21,10 @@ on:
       prerelease:
         required: false
         type: boolean
+      branch:
+        required: false
+        type: string
+        default: main
     secrets:
       repo_release_token:
         required: true
@@ -162,4 +166,4 @@ jobs:
           token: ${{ secrets.repo_release_token }}
           tag_name: ${{ steps.gen_tags.outputs.tag_name }}
           prerelease: ${{ needs.check.outputs.prerelease }}
-          target_commitish: ${{ github.ref_name }}
+          target_commitish: ${{ inputs.branch }}
