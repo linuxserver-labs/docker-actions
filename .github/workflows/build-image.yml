@@ -5,7 +5,7 @@ on:
     inputs:
       target-arch:
         required: true
-        type: string    
+        type: string
       repo_owner:
         required: true
         type: string
@@ -20,10 +20,10 @@ on:
         type: string
       release_name:
         required: false
-        type: string        
+        type: string
     secrets:
       scarf_token:
-        required: true          
+        required: true
 
 jobs:
   bake:
@@ -106,8 +106,8 @@ jobs:
             ${{ steps.docker_meta.outputs.bake-file }}
           set: |
             image.args.BUILD_DATE=${{ steps.gen_date.outputs.build_date }}
-            image.args.VERSION=${IMAGE_VERSION}
-            image.args.APP_VERSION=${{ steps.gen_release.outputs.app_version }}            
+            image.args.VERSION=${{ steps.gen_release.outputs.tag_name }}
+            image.args.APP_VERSION=${{ steps.gen_release.outputs.app_version }}
           targets: ${{ inputs.target-arch }}
           push: true
       -
