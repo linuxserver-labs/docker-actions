@@ -57,7 +57,7 @@ This workflow will build a Docker image on release or on a PR being opened. It i
 * alpine - Alpine package release, requires `release_url` and `release_name` inputs
 * script - Shell script release. Requires `get-version.sh` script in root of repo
 
-`app_name` is a mandatory input and should be the desired name of the image and consisten across all workflows.
+`app_name` is a mandatory input and should be the desired name of the image and consistent across all workflows.
 
 `target-arch` is mandatory and should be an array of one or more of `amd64`, `arm64v8`, `arm32v7`
 
@@ -96,7 +96,7 @@ This workflow will check for updates to the upstream application and generate a 
 * alpine - Alpine package release, requires `release_url` and `release_name` inputs
 * script - Shell script release. Requires `get-version.sh` script in root of repo
 
-`app_name` is a mandatory input and should be the desired name of the image and consisten across all workflows.
+`app_name` is a mandatory input and should be the desired name of the image and consistent across all workflows.
 
 `prerelease` is an optional input and will cause all releases to be marked as prerelease.
 
@@ -129,7 +129,7 @@ check-baseimage-update.yml
 
 This workflow will check for updates to the base image used by the repo and generate a release if there are any.
 
-`app_name` is a mandatory input and should be the desired name of the image and consisten across all workflows.
+`app_name` is a mandatory input and should be the desired name of the image and consistent across all workflows.
 
 `baseimage` is a mandatory input and should be the name of the base image to check for updates. e.g. if you're using `linuxserver/baseimage-alpine-nginx` then the `baseimage` should be `alpine-nginx`.
 
