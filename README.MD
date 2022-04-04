@@ -18,9 +18,9 @@ This workflow will build a Docker image on release or on a PR being opened. It i
 * alpine - Alpine package release, requires `release_url` and `release_name` inputs
 * script - Shell script release. Requires `get-version.sh` script in root of repo
 
-`app_name` is a mandatory input and should be the desired name of the image and consisten across all workflows.
+`app_name` is a mandatory input and should be the desired name of the image and consistent across all workflows.
 
-`target-arch` is mandatory and can be one of `any`, `amd64`, `arm`, `64`
+`target-arch` is mandatory and can be one of `all`, `amd64`, `arm`, `64`
 
 Example workflow:
 
