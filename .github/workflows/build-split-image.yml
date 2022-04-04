@@ -1,0 +1,203 @@
+name: Build Split-Arch Image On Release
+
+on:
+  workflow_call:
+    inputs:
+      target-arch:
+        required: true
+        type: string
+      repo_owner:
+        required: true
+        type: string
+      app_name:
+        required: true
+        type: string
+      release_type:
+        required: true
+        type: string
+      release_url:
+        required: false
+        type: string
+      release_name:
+        required: false
+        type: string
+    secrets:
+      scarf_token:
+        required: true
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: ${{ fromJson(inputs.target-arch) }}
+    outputs:
+      meta-amd64: ${{ steps.dump_tags.outputs.meta-amd64 }}
+      meta-arm64v8: ${{ steps.dump_tags.outputs.meta-arm64v8 }}
+      meta-arm32v7: ${{ steps.dump_tags.outputs.meta-arm32v7 }}
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -  
+        name: Docker meta
+        id: docker_meta
+        uses: docker/metadata-action@v3.6.2
+        with:
+          images: |
+            ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}
+          labels: |
+            org.opencontainers.image.title=${{ inputs.app_name }}
+            org.opencontainers.image.description=${{ inputs.app_name }}
+            org.opencontainers.image.vendor=${{ inputs.repo_owner }}
+          flavor: |
+            prefix=${{ matrix.arch }}-,onlatest=true
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1.6.0
+      -
+        name: Login to GitHub Container Registry
+        uses: docker/login-action@v1.14.1
+        with:
+          registry: ghcr.io
+          username: ${{ inputs.repo_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - 
+        name: Generate build date
+        id: gen_date
+        run: |
+          BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
+          echo "**** Setting build date to $BUILD_DATE ****"
+          echo ::set-output name=build_date::${BUILD_DATE}
+      - 
+        name: Generate release version
+        id: gen_release
+        run: |
+          if [ -z ${{ github.event.release.tag_name }} ]; then
+            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | jq -r '(.tag_name)?')
+            if [ -z $IMAGE_VERSION ] || [ $IMAGE_VERSION == null ]; then
+              case ${{ inputs.release_type }} in
+                github)
+                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
+                  ;;
+                github_commit)
+                  IMAGE_VERSION=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[])' | cut -c1-8);
+                  ;;
+                github_tag)
+                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+                  ;;
+                alpine)
+                  IMAGE_VERSION=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
+                  ;;
+                script)
+                  if test -f "./get-version.sh"; then
+                    IMAGE_VERSION=$(bash "./get-version.sh");
+                  fi
+                  ;;
+              esac
+            fi
+          else
+            IMAGE_VERSION=${{ github.event.release.tag_name }}
+          fi
+          APP_VERSION=$(echo ${IMAGE_VERSION} | awk -F'-ls' '{print $1}')
+          echo "**** Setting release tag to $IMAGE_VERSION ****"
+          echo ::set-output name=tag_name::${IMAGE_VERSION}
+          echo ::set-output name=app_version::${APP_VERSION}
+      -
+        name: Build and push
+        uses: docker/bake-action@v1.7.0
+        with:
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.docker_meta.outputs.bake-file }}
+          set: |
+            image.args.BUILD_DATE=${{ steps.gen_date.outputs.build_date }}
+            image.args.VERSION=${{ steps.gen_release.outputs.tag_name }}
+            image.args.APP_VERSION=${{ steps.gen_release.outputs.app_version }}
+          targets: ${{ matrix.arch }}
+          push: true
+      -
+        name: Dump Tags
+        id: dump_tags
+        run: |
+          echo ::set-output name=meta-${{ matrix.arch }}::${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}
+
+  manifest:
+    runs-on: ubuntu-latest
+    needs: bake
+    strategy:
+      matrix:
+        registry: ["ghcr.io"]
+    outputs:
+      final-image: ${{ steps.image_tags.outputs.final_image }}
+    steps:
+      -
+        name: Login to DockerHub
+        if: matrix.registry == 'docker.io'
+        uses: docker/login-action@v1.14.1
+        with:
+          username: ${{ inputs.dockerhub_user }}
+          password: ${{ secrets.dockerhub_password }}
+      -
+        name: Login to GitHub Container Registry
+        if: matrix.registry == 'ghcr.io'        
+        uses: docker/login-action@v1.14.1
+        with:
+          registry: ghcr.io
+          username: ${{ inputs.repo_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: Create image tags
+        id: image_tags
+        run: |
+          AMD64=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d '/')
+          ARM64=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d '/')
+          ARM32=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d '/')
+          EXTRA_IMAGES=$(echo ${{ matrix.registry }}/$AMD64 ${{ matrix.registry }}/$ARM64 ${{ matrix.registry }}/$ARM32 | tr ' ' ',')
+          if [[ -n $AMD64 ]];then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d ':' | cut -f 2- -d '-');
+          elif [[ -n $ARM64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d ':' | cut -f 2- -d '-');
+          elif [[ -n $ARM32 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); fi
+          FINAL_IMAGE=ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${TAG_NAME}
+          echo ::set-output name=extra_images::${EXTRA_IMAGES}
+          echo ::set-output name=tag_name::${TAG_NAME}
+          echo ::set-output name=final_image::${FINAL_IMAGE}
+      - 
+        name: Create and push manifest for tag
+        uses: Noelware/docker-manifest-action@master
+        with:
+          base-image: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${{ steps.image_tags.outputs.tag_name }}
+          extra-images: ${{ steps.image_tags.outputs.extra_images }}
+          push: true          
+      - 
+        name: Create and push manifest for latest
+        if:  ${{ github.event.release.tag_name != '' }}
+        uses: Noelware/docker-manifest-action@master
+        with:
+          base-image: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}:latest
+          extra-images: ${{ steps.image_tags.outputs.extra_images }}
+          push: true
+
+  finally:
+    runs-on: ubuntu-latest
+    needs: manifest
+    steps:
+      -
+        name: Scan for vulnerabilities
+        uses: crazy-max/ghaction-container-scan@v1
+        with:
+          image: ${{ needs.manifest.outputs.final-image }}    
+      -
+        name: Push to Scarf
+        id: push_scarf
+        run: |
+          PACKAGE_UUID=$(curl -s -H "Authorization: Bearer ${{ secrets.scarf_token }}" https://scarf.sh/api/v1/organizations/linuxserver-ci/packages | jq -r '.[] | select(.name=="${{ inputs.repo_owner }}/${{ inputs.app_name }}") | .uuid')
+          if [ -z "${PACKAGE_UUID}" ]; then
+            echo "Adding package to Scarf.sh"
+            curl -sX POST https://scarf.sh/api/v1/organizations/linuxserver-ci/packages -H "Authorization: Bearer ${{ secrets.scarf_token }}" -H "Content-Type: application/json" \
+              -d '{"name":"${{ inputs.repo_owner }}/${{ inputs.app_name }}","shortDescription":"example description","libraryType":"docker","website":"https://github.com/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}","backendUrl":"https://ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}","publicUrl":"https://lscr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}"}'
+          else
+            echo "Package already exists on Scarf.sh"
+          fi
