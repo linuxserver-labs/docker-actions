@@ -25,8 +25,6 @@ This workflow will build a Docker image on release or on a PR being opened. It i
 Example workflow:
 
 ```yaml
-
-```yaml
 name: Build Image On Release
 
 on:
