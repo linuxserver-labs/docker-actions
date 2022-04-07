@@ -137,7 +137,7 @@ jobs:
         echo ::set-output name=ls_version::${LS_VERSION}
         echo ::set-output name=app_name::${{ inputs.app_name }}
 
-        if ${{ inputs.prerelease }}=='true'; then
+        if ${{ inputs.prerelease }} == 'true'; then
           echo ::set-output name=prerelease::true
         else
           echo ::set-output name=prerelease::false
