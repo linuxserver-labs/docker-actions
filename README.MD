@@ -4,6 +4,8 @@
 
 ## Workflows
 
+To support passing app version args to the build process your Dockerfile(s) should use the generic `APP_VERSION` arg rather than an app-specific env var.
+
 The following workflows are available for use:
 
 ### build-image.yml

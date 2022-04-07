@@ -85,4 +85,3 @@ jobs:
           tag_name: ${{ steps.gen_tags.outputs.tag_name }}
           prerelease: ${{ steps.gen_tags.outputs.prerelease }}
           target_commitish: ${{ inputs.branch }}
-
