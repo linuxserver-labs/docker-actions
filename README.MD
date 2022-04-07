@@ -4,7 +4,8 @@
 
 ## Workflows
 
-To support passing app version args to the build process your Dockerfile(s) should use the generic `APP_VERSION` arg rather than an app-specific env var.
+* To support passing app version args to the build process your Dockerfile(s) should use the generic `APP_VERSION` arg rather than an app-specific env var.
+* A bake definition .hcl file is required to build the images. An example `docker-bake.hcl` file is included in this repo and can generally be used as-is.
 
 The following workflows are available for use:
 
