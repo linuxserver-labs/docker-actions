@@ -128,7 +128,7 @@ jobs:
       repo_release_token: ${{ secrets.repo_release_token }}
 ```
 
-check-baseimage-update.yml
+### check-baseimage-update.yml
 
 This workflow will check for updates to the base image used by the repo and generate a release if there are any.
 
