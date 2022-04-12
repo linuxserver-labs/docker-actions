@@ -156,10 +156,10 @@ jobs:
           AMD64=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d '/')
           ARM64=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d '/')
           ARM32=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d '/')
-          EXTRA_IMAGES=$(echo ${{ matrix.registry }}/$AMD64 ${{ matrix.registry }}/$ARM64 ${{ matrix.registry }}/$ARM32 | tr ' ' ',')
-          if [[ -n $AMD64 ]];then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d ':' | cut -f 2- -d '-');
-          elif [[ -n $ARM64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d ':' | cut -f 2- -d '-');
-          elif [[ -n $ARM32 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); fi
+          if [[ -n $AMD64 ]];then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); AMD64="${{ matrix.registry }}/${AMD64}"; fi
+          if [[ -n $ARM64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); ARM64="${{ matrix.registry }}/${ARM64}"; fi
+          if [[ -n $ARM32 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); ARM32="${{ matrix.registry }}/${ARM32}"; fi
+          EXTRA_IMAGES=$(echo $AMD64 $ARM64 $ARM32 | tr ' ' ',')
           FINAL_IMAGE=ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${TAG_NAME}
           echo ::set-output name=extra_images::${EXTRA_IMAGES}
           echo ::set-output name=tag_name::${TAG_NAME}
