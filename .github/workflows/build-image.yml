@@ -111,6 +111,11 @@ jobs:
           targets: ${{ inputs.target-arch }}
           push: true
       -
+        name: Scan for vulnerabilities
+        uses: crazy-max/ghaction-container-scan@v1
+        with:
+          image: ${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}
+      -
         name: Push to Scarf
         id: push_scarf
         run: |
