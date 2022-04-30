@@ -185,10 +185,15 @@ jobs:
     needs: manifest
     steps:
       -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
         name: Scan for vulnerabilities
+        id: scan
         uses: crazy-max/ghaction-container-scan@v1
         with:
-          image: ${{ needs.manifest.outputs.final-image }}    
+          image: ${{ needs.manifest.outputs.final-image }}
+          dockerfile: ./Dockerfile
       -
         name: Push to Scarf
         id: push_scarf
