@@ -68,7 +68,7 @@ jobs:
         id: gen_release
         run: |
           if [ -z ${{ github.event.release.tag_name }} ]; then
-            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases/latest" | jq -r '(.tag_name)?')
+            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r '(.[0].tag_name)?')
             if [ -z $IMAGE_VERSION ] || [ $IMAGE_VERSION == null ]; then
               case ${{ inputs.release_type }} in
                 github)
@@ -110,6 +110,13 @@ jobs:
             image.args.APP_VERSION=${{ steps.gen_release.outputs.app_version }}
           targets: ${{ inputs.target-arch }}
           push: true
+      -
+        name: Scan for vulnerabilities
+        id: scan
+        uses: crazy-max/ghaction-container-scan@v1
+        with:
+          image: ${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}
+          dockerfile: ./Dockerfile
       -
         name: Push to Scarf
         id: push_scarf
