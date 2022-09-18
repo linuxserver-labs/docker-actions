@@ -64,7 +64,7 @@ jobs:
         name: Generate release tag
         id: gen_tags
         run: |
-          IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r .[0].tag_name)
+          IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r 'sort_by(.published_at) | .[-1].tag_name')
           APP_VERSION=$(echo $IMAGE_VERSION | awk '{sub("-[^-]+$","")} 1')
           LS_VERSION=$(( $(echo $IMAGE_VERSION | awk -NF '-' '{print $NF}' | cut -c 3-8 | sed 's/^0*//')+1 ))
           RELEASE_TAG=$APP_VERSION-ls$(printf $LS_VERSION)
