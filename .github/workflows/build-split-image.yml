@@ -190,7 +190,7 @@ jobs:
       -
         name: Scan for vulnerabilities
         id: scan
-        uses: crazy-max/ghaction-container-scan@v1
+        uses: crazy-max/ghaction-container-scan@v2
         with:
           image: ${{ needs.manifest.outputs.final-image }}
           dockerfile: ./Dockerfile
