@@ -71,7 +71,7 @@ jobs:
         run: |
           BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
           echo "**** Setting build date to $BUILD_DATE ****"
-          echo ::set-output name=build_date::${BUILD_DATE}
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
       - 
         name: Generate release version
         id: gen_release
@@ -104,8 +104,8 @@ jobs:
           fi
           APP_VERSION=$(echo ${IMAGE_VERSION} | awk -F'-ls' '{print $1}')
           echo "**** Setting release tag to $IMAGE_VERSION ****"
-          echo ::set-output name=tag_name::${IMAGE_VERSION}
-          echo ::set-output name=app_version::${APP_VERSION}
+          echo "tag_name=${IMAGE_VERSION}" >> $GITHUB_OUTPUT
+          echo "app_version=${APP_VERSION}" >> $GITHUB_OUTPUT
       -
         name: Build and push
         uses: docker/bake-action@v2.3.0
@@ -123,7 +123,7 @@ jobs:
         name: Dump Tags
         id: dump_tags
         run: |
-          echo ::set-output name=meta-${{ matrix.arch }}::${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}
+          echo "meta-${{ matrix.arch }}=${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}" >> $GITHUB_OUTPUT
 
   manifest:
     runs-on: ubuntu-latest
@@ -161,9 +161,9 @@ jobs:
           if [[ -n $ARM32 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); ARM32="${{ matrix.registry }}/${ARM32}"; fi
           EXTRA_IMAGES=$(echo $AMD64 $ARM64 $ARM32 | tr ' ' ',')
           FINAL_IMAGE=ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${TAG_NAME}
-          echo ::set-output name=extra_images::${EXTRA_IMAGES}
-          echo ::set-output name=tag_name::${TAG_NAME}
-          echo ::set-output name=final_image::${FINAL_IMAGE}
+          echo "extra_images=${EXTRA_IMAGES}" >> $GITHUB_OUTPUT
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "final_image=${FINAL_IMAGE}" >> $GITHUB_OUTPUT
       - 
         name: Create and push manifest for tag
         uses: Noelware/docker-manifest-action@master

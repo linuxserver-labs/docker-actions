@@ -47,9 +47,9 @@ jobs:
             jq -r 'first(.[].published_at)') +%s)
           if [ $BASETIME -le $RELEASETIME ]; then
               echo "*** Baseimage release is older than latest container release, skipping ***"
-              echo ::set-output name=modified::false
+              echo "modified=false" >> $GITHUB_OUTPUT
           else
-              echo ::set-output name=modified::true
+              echo "modified=true" >> $GITHUB_OUTPUT
           fi
 
   release:
@@ -69,13 +69,13 @@ jobs:
           LS_VERSION=$(( $(echo $IMAGE_VERSION | awk -NF '-' '{print $NF}' | cut -c 3-8 | sed 's/^0*//')+1 ))
           RELEASE_TAG=$APP_VERSION-ls$(printf $LS_VERSION)
           echo "**** Setting release tag to $RELEASE_TAG ****"
-          echo ::set-output name=tag_name::${RELEASE_TAG}
+          echo "tag_name=${RELEASE_TAG}" >> $GITHUB_OUTPUT
 
           echo "**** Prerelease type is ${{ inputs.prerelease }}"
           if ${{ inputs.prerelease }} == 'true'; then
-            echo ::set-output name=prerelease::true
+            echo "prerelease=true" >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=prerelease::false
+            echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
       - 
         name: Do release

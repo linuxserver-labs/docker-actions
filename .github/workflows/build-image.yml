@@ -62,7 +62,7 @@ jobs:
         run: |
           BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
           echo "**** Setting build date to $BUILD_DATE ****"
-          echo ::set-output name=build_date::${BUILD_DATE}
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
       - 
         name: Generate release version
         id: gen_release
@@ -95,8 +95,8 @@ jobs:
           fi
           APP_VERSION=$(echo ${IMAGE_VERSION} | awk -F'-ls' '{print $1}')
           echo "**** Setting release tag to $IMAGE_VERSION ****"
-          echo ::set-output name=tag_name::${IMAGE_VERSION}
-          echo ::set-output name=app_version::${APP_VERSION}
+          echo "tag_name=${IMAGE_VERSION}" >> $GITHUB_OUTPUT
+          echo "app_version=${APP_VERSION}" >> $GITHUB_OUTPUT
       -
         name: Build and push
         uses: docker/bake-action@v2.3.0

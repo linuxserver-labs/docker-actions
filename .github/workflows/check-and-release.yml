@@ -125,22 +125,22 @@ jobs:
 
         if [ "${EXT_RELEASE}" == "${IMAGE_VERSION}" ]; then
           echo "**** Version ${EXT_RELEASE} already pushed, not releasing ****"
-          echo ::set-output name=update_available::false
+          echo "update_available=false" >> $GITHUB_OUTPUT
           exit 0
         fi
 
         echo "**** Version ${EXT_RELEASE} has not been pushed, releasing ****"
         echo "**** LS_VERSION set to $LS_VERSION ****"
-        echo ::set-output name=update_available::true
+        echo "update_available=true" >> $GITHUB_OUTPUT
         IMAGE_RELEASE=${EXT_RELEASE}
-        echo ::set-output name=image_release::${IMAGE_RELEASE}
-        echo ::set-output name=ls_version::${LS_VERSION}
-        echo ::set-output name=app_name::${{ inputs.app_name }}
+        echo "image_release=${IMAGE_RELEASE}" >> $GITHUB_OUTPUT
+        echo "ls_version=${LS_VERSION}" >> $GITHUB_OUTPUT
+        echo "app_name=${{ inputs.app_name }}" >> $GITHUB_OUTPUT
 
         if ${{ inputs.prerelease }} == 'true'; then
-          echo ::set-output name=prerelease::true
+          echo "prerelease=true" >> $GITHUB_OUTPUT
         else
-          echo ::set-output name=prerelease::false
+          echo "prerelease=false" >> $GITHUB_OUTPUT
         fi
 
   release:
@@ -157,7 +157,7 @@ jobs:
         run: |
           TAG_NAME="${{ needs.check.outputs.image_release }}-${{ needs.check.outputs.ls_version }}"
           echo "**** Setting release tag to $TAG_NAME ****"
-          echo ::set-output name=tag_name::${TAG_NAME}
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
       - 
         name: Do release
         uses: softprops/action-gh-release@v1
