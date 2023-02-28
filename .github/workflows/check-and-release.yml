@@ -49,13 +49,13 @@ jobs:
         echo "**** Retrieving external version ****"
         case ${{ inputs.release_type }} in
           github)
-            EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
+            EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
             ;;
           github_commit)
             EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[])' | cut -c1-8);
             ;;
           github_tag)
-            EXT_RELEASE=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+            EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
             ;;
           alpine)
             EXT_RELEASE=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
@@ -76,48 +76,66 @@ jobs:
         echo "**** External version: ${EXT_RELEASE} ****"
         echo "**** Retrieving last pushed version ****"
 
-        image="${{ inputs.repo_owner }}/${{ inputs.app_name }}"
-        tag="latest"
-        token=$(curl -s \
+        IMAGE="${{ inputs.repo_owner }}/${{ inputs.app_name }}"
+        TAG="latest"
+        TOKEN=$(curl -s \
           "https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull" \
           | jq -r '.[]')
-        if [ "${token:0:1}" == "[" ]; then
+        if [ "${TOKEN:0:1}" == "[" ]; then
           IMAGE_VERSION="null"
           LS_VERSION="ls1"
         else
-          multidigest=$(curl -s \
+          MULTIDIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
+            --silent \
+            --location \
             --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
             --header "Accept: application/vnd.oci.image.index.v1+json" \
-            --header "Authorization: Bearer ${token}" \
-            "https://ghcr.io/v2/${image}/manifests/${tag}" \
-            | jq -r 'first(.manifests[].digest)?')
-          if [ -z "${multidigest}" ]; then
-            if digest=$(curl -s \
+            --header "Authorization: Bearer ${TOKEN}" \
+            "https://ghcr.io/v2/${IMAGE}/manifests/${TAG}" | jq -r 'first(.manifests[].digest)?')
+          if [[ -z "${MULTIDIGEST}" ]]; then
+            if DIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
+              --silent \
+              --location \
               --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
               --header "Accept: application/vnd.oci.image.manifest.v1+json" \
-              --header "Authorization: Bearer ${token}" \
-              "https://ghcr.io/v2/${image}/manifests/${tag}" | grep -v 404); then
-                digest=$(echo $digest | jq -r '.config.digest');
+              --header "Authorization: Bearer ${TOKEN}" \
+              "https://ghcr.io/v2/${IMAGE}/manifests/${TAG}"); then
+              if jq -e . >/dev/null 2>&1 <<<"$DIGEST"; then
+                DIGEST=$(echo "${DIGEST}" | jq -r '.config.digest');
+              else
+                DIGEST="unknown"
+              fi
             fi
           else
-            if digest=$(curl -s \
+            if DIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
+              --silent \
+              --location \
               --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
               --header "Accept: application/vnd.oci.image.manifest.v1+json" \
-              --header "Authorization: Bearer ${token}" \
-              "https://ghcr.io/v2/${image}/manifests/${multidigest}" | grep -v 404); then
-                digest=$(echo $digest | jq -r '.config.digest');
+              --header "Authorization: Bearer ${TOKEN}" \
+              "https://ghcr.io/v2/${IMAGE}/manifests/${MULTIDIGEST}"); then
+              if jq -e . >/dev/null 2>&1 <<<"$DIGEST"; then
+                DIGEST=$(echo "${DIGEST}" | jq -r '.config.digest');
+              else
+                DIGEST="unknown"
+              fi
             fi
           fi
-          if [ -z "${digest}" ] || [ "${digest}" == "null" ]; then
+          if [[ -z "${DIGEST}" ]] || [[ "${DIGEST}" == "null" ]]; then
             echo "**** Package exists but can't find image tagged latest, releasing ****"
             IMAGE_VERSION="null"
             LS_VERSION="ls1"
+          elif [[ "${DIGEST}" == "unknown" ]]; then
+            echo "**** Package exists but something is wrong with the manifest, using last release instead ****"
+            LAST_RELEASE=$(curl -sL "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | awk '/tag_name/{print $4;exit}' FS='[""]')
+            IMAGE_VERSION=$(echo ${LAST_RELEASE} | awk -F'-ls' '{print $1}')
+            LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
           else
-            image_info=$(curl -sL \
-              --header "Authorization: Bearer ${token}" \
-              "https://ghcr.io/v2/${image}/blobs/${digest}" \
+            IMAGE_INFO=$(curl -sL \
+              --header "Authorization: Bearer ${TOKEN}" \
+              "https://ghcr.io/v2/${IMAGE}/blobs/${DIGEST}" \
               | jq -r '.config')
-            IMAGE_RELEASE=$(echo ${image_info} | jq -r '.Labels."org.opencontainers.image.version"')
+            IMAGE_RELEASE=$(echo ${IMAGE_INFO} | jq -r '.Labels."org.opencontainers.image.version"')
             IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
             LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
             LS_VERSION="ls$(( $LS_VERSION+1 ))"
