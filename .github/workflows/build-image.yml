@@ -108,6 +108,7 @@ jobs:
             image.args.BUILD_DATE=${{ steps.gen_date.outputs.build_date }}
             image.args.VERSION=${{ steps.gen_release.outputs.tag_name }}
             image.args.APP_VERSION=${{ steps.gen_release.outputs.app_version }}
+            *.attest=type=provenance,enabled=false
           targets: ${{ inputs.target-arch }}
           push: true
       -
