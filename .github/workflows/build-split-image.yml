@@ -108,7 +108,7 @@ jobs:
           echo "app_version=${APP_VERSION}" >> $GITHUB_OUTPUT
       -
         name: Build and push
-        uses: docker/bake-action@v2.3.0
+        uses: docker/bake-action@v3.0.1
         with:
           files: |
             ./docker-bake.hcl
