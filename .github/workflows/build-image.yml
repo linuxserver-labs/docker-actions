@@ -99,7 +99,7 @@ jobs:
           echo "app_version=${APP_VERSION}" >> $GITHUB_OUTPUT
       -
         name: Build and push
-        uses: docker/bake-action@v2.3.0
+        uses: docker/bake-action@v3.0.1
         with:
           files: |
             ./docker-bake.hcl
@@ -108,9 +108,9 @@ jobs:
             image.args.BUILD_DATE=${{ steps.gen_date.outputs.build_date }}
             image.args.VERSION=${{ steps.gen_release.outputs.tag_name }}
             image.args.APP_VERSION=${{ steps.gen_release.outputs.app_version }}
-            *.attest=type=provenance,enabled=false
           targets: ${{ inputs.target-arch }}
           push: true
+          provenance: false
       -
         name: Scan for vulnerabilities
         id: scan
