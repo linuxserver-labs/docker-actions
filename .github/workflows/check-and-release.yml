@@ -41,7 +41,7 @@ jobs:
       prerelease: ${{ steps.build_check.outputs.prerelease }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Check if we should release
       id: build_check
@@ -171,7 +171,7 @@ jobs:
     steps:  
       - 
         name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - 
         name: Generate release tag
         id: gen_tags
