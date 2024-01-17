@@ -167,7 +167,7 @@ jobs:
           echo "final_image=${FINAL_IMAGE}" >> $GITHUB_OUTPUT
       - 
         name: Create and push manifest for tag
-        uses: Noelware/docker-manifest-action@0.4.0
+        uses: Noelware/docker-manifest-action@0.4.1
         with:
           base-image: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${{ steps.image_tags.outputs.tag_name }}
           extra-images: ${{ steps.image_tags.outputs.extra_images }}
@@ -175,7 +175,7 @@ jobs:
       - 
         name: Create and push manifest for latest
         if:  ${{ github.event.release.tag_name != '' }}
-        uses: Noelware/docker-manifest-action@0.4.0
+        uses: Noelware/docker-manifest-action@0.4.1
         with:
           base-image: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}:latest
           extra-images: ${{ steps.image_tags.outputs.extra_images }}
