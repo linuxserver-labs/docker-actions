@@ -32,7 +32,6 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[ci-skip]')"
     outputs:
       image_release: ${{ steps.build_check.outputs.image_release }}
       ls_version: ${{ steps.build_check.outputs.ls_version }}
@@ -42,7 +41,7 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    
+
     - name: Check if we should release
       id: build_check
       run: |
@@ -65,7 +64,7 @@ jobs:
               EXT_RELEASE=$(bash "./get-version.sh");
             fi
             ;;
-        esac      
+        esac
         if [ -z "${EXT_RELEASE}" ] || [ "${EXT_RELEASE}" == "null" ]; then
           echo "**** Can't retrieve external version, exiting ****"
           exit 1
@@ -168,18 +167,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: check
     if:  ${{ needs.check.outputs.update_available == 'true' }}
-    steps:  
-      - 
+    steps:
+      -
         name: Checkout
         uses: actions/checkout@v4
-      - 
+      -
         name: Generate release tag
         id: gen_tags
         run: |
           TAG_NAME="${{ needs.check.outputs.image_release }}-${{ needs.check.outputs.ls_version }}"
           echo "**** Setting release tag to $TAG_NAME ****"
           echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
-      - 
+      -
         name: Do release
         uses: softprops/action-gh-release@v2
         with:
