@@ -122,13 +122,13 @@ jobs:
         env:
           BAKE_METADATA: ${{ steps.build_push.outputs.metadata }}
         run: |
-          image_digest=$(jq -rc '.[]."containerimage.digest"' <<< "${BAKE_METADATA}")
-          echo ${image_digest}
+          DIGEST=$(jq -rc '.[]."containerimage.digest"' <<< "${BAKE_METADATA}")
+          echo "Image digest: ${DIGEST}"
           echo "image_digest=${DIGEST}" >> $GITHUB_OUTPUT
       -
         name: Load Key
         id: op-load-key
-        uses: 1password/load-secrets-action@v1
+        uses: 1password/load-secrets-action@v2
         with:
           export-env: true
         env:
@@ -137,7 +137,7 @@ jobs:
       -
         name: Load Pass
         id: op-load-pass
-        uses: 1password/load-secrets-action@v1
+        uses: 1password/load-secrets-action@v2
         with:
           export-env: true
         env:
