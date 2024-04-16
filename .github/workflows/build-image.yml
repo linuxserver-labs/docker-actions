@@ -21,9 +21,6 @@ on:
       release_name:
         required: false
         type: string
-    secrets:
-      scarf_token:
-        required: true
 
 jobs:
   bake:
