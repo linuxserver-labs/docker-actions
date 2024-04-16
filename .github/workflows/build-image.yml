@@ -129,7 +129,7 @@ jobs:
         id: op-load-key
         uses: 1password/load-secrets-action@v1
         with:
-          export-env: false
+          export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           COSIGN_PRIVATE_KEY: op://Labs/labs-sigstore-key/notesPlain
@@ -138,7 +138,7 @@ jobs:
         id: op-load-pass
         uses: 1password/load-secrets-action@v1
         with:
-          export-env: false
+          export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           COSIGN_PASSWORD: op://Labs/labs-sigstore-pass/password
@@ -152,8 +152,7 @@ jobs:
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${images}
         env:
           TAGS: ${{ steps.docker_meta.outputs.tags }}
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          DIGEST: ${{ steps.get_digest.outputs.image_digest }}
       -
         name: Scan for vulnerabilities
         id: scan
