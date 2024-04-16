@@ -21,6 +21,9 @@ on:
       release_name:
         required: false
         type: string
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN:
+        required: true
 
 jobs:
   bake:
