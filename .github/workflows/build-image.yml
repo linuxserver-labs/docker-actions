@@ -146,7 +146,7 @@ jobs:
           TAGS: ${{ steps.docker_meta.outputs.tags }}
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          DIGEST: ${{ fromJSON(steps.build_push.outputs.metadata.containerimage.digest) }}
+          DIGEST: ${{ steps.build_push.outputs.metadata.containerimage.digest }}
       -
         name: Scan for vulnerabilities
         id: scan
