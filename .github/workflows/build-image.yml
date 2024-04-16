@@ -122,7 +122,8 @@ jobs:
         env:
           BAKE_METADATA: ${{ steps.build_push.outputs.metadata }}
         run: |
-          image_digest=$(jq -c '.[]."containerimage.digest"' <<< "${BAKE_METADATA}")
+          image_digest=$(jq -rc '.[]."containerimage.digest"' <<< "${BAKE_METADATA}")
+          echo ${image_digest}
           echo "image_digest=${DIGEST}" >> $GITHUB_OUTPUT
       -
         name: Load Key
