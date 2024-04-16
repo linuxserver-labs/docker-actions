@@ -32,7 +32,7 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v4
-      -  
+      -
         name: Docker meta
         id: docker_meta
         uses: docker/metadata-action@v5.5.1
@@ -50,20 +50,23 @@ jobs:
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.3.0
       -
+        name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+      -
         name: Login to GitHub Container Registry
         uses: docker/login-action@v3.1.0
         with:
           registry: ghcr.io
           username: ${{ inputs.repo_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - 
+      -
         name: Generate build date
         id: gen_date
         run: |
           BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
           echo "**** Setting build date to $BUILD_DATE ****"
           echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
-      - 
+      -
         name: Generate release version
         id: gen_release
         run: |
@@ -99,6 +102,7 @@ jobs:
           echo "app_version=${APP_VERSION}" >> $GITHUB_OUTPUT
       -
         name: Build and push
+        id: build_push
         uses: docker/bake-action@v4.3.0
         with:
           files: |
@@ -111,6 +115,38 @@ jobs:
           targets: ${{ inputs.target-arch }}
           push: true
           provenance: false
+          sbom: true
+      -
+        name: Load Key
+        id: op-load-key
+        uses: 1password/load-secrets-action@v1
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          COSIGN_PRIVATE_KEY: op://Labs/labs-sigstore-key/notesPlain
+      -
+        name: Load Pass
+        id: op-load-pass
+        uses: 1password/load-secrets-action@v1
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          COSIGN_PASSWORD: op://Labs/labs-sigstore-pass/password
+      -
+        name: Sign image with a key
+        run: |
+          images=""
+          for tag in ${TAGS}; do
+            images+="${tag}@${DIGEST} "
+          done
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${images}
+        env:
+          TAGS: ${{ steps.docker_meta.outputs.tags }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          DIGEST: ${{ fromJSON(steps.build_push.outputs.metadata.containerimage.digest) }}
       -
         name: Scan for vulnerabilities
         id: scan
@@ -118,15 +154,3 @@ jobs:
         with:
           image: ${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}
           dockerfile: ./Dockerfile
-      -
-        name: Push to Scarf
-        id: push_scarf
-        run: |
-          PACKAGE_UUID=$(curl -s -H "Authorization: Bearer ${{ secrets.scarf_token }}" https://scarf.sh/api/v1/organizations/linuxserver-ci/packages | jq -r '.[] | select(.name=="${{ inputs.repo_owner }}/${{ inputs.app_name }}") | .uuid')
-          if [ -z "${PACKAGE_UUID}" ]; then
-            echo "Adding package to Scarf.sh"
-            curl -sX POST https://scarf.sh/api/v1/organizations/linuxserver-ci/packages -H "Authorization: Bearer ${{ secrets.scarf_token }}" -H "Content-Type: application/json" \
-              -d '{"name":"${{ inputs.repo_owner }}/${{ inputs.app_name }}","shortDescription":"example description","libraryType":"docker","website":"https://github.com/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}","backendUrl":"https://ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}","publicUrl":"https://lscr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}"}'
-          else
-            echo "Package already exists on Scarf.sh"
-          fi
