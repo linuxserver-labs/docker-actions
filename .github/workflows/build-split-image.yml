@@ -195,13 +195,18 @@ jobs:
             docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
           fi
           for i in ${{ steps.image_tags.outputs.extra_images }}; do
-            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i##*-}-latest -f '{{ index .Id }}') && \
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i##*-}-latest@${DIGEST}
-            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i##*-}-${EXT_RELEASE_TAG} -f '{{ index .Id }}') && \
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i##*-}-${EXT_RELEASE_TAG}@${DIGEST}
+            i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
+            echo "Signing ${MANIFESTIMAGE}:${i}-latest"
+            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i}-latest -f '{{ index .Id }}') && \
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-latest@${DIGEST}
+            echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}"
+            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} -f '{{ index .Id }}') && \
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
           done
+          echo "Signing ${MANIFESTIMAGE}:latest"
           export DIGEST=$(docker inspect ${MANIFESTIMAGE}:latest -f '{{ index .Id }}') && \
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
+          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}"
           export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} -f '{{ index .Id }}') && \
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
         env:
