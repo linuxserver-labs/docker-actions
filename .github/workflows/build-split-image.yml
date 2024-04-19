@@ -197,10 +197,20 @@ jobs:
           IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
           for i in "${IMAGES[@]}"; do
             i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
-            export DIGEST=$(docker buildx imagetools inspect --raw ${MANIFESTIMAGE}:${i}-latest | jq -r '.manifests[0].digest') && \
+            DIGEST=$(docker buildx imagetools inspect --raw ${MANIFESTIMAGE}:${i}-latest | jq -r '.manifests[0].digest') && \
             echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest with digest ${DIGEST}"
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}@${DIGEST}
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-latest@${DIGEST}
           done
+          case "${{ matrix.registry }}" in
+            "ghcr.io") AUTH_URL="https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull"; REGISTRY="ghcr.io";;
+            "docker.io") AUTH_URL="https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ inputs.repo_owner }}/${{ inputs.app_name }}:pull"; REGISTRY="registry-1.docker.io";;
+          esac
+          TOKEN="$(curl -s -f --retry 10 --retry-max-time 60 --retry-connrefused "${AUTH_URL}" | jq -r '.token')"
+          DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${{ inputs.repo_owner }}/${{ inputs.app_name }}/manifests/latest 2>&1 | grep docker-content-digest | cut -d' ' -f2)
+          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:latest with digest ${DIGEST}"
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
         env:
           EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
           MANIFESTIMAGE: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}
