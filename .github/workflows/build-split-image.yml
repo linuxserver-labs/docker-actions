@@ -51,15 +51,18 @@ jobs:
             org.opencontainers.image.vendor=${{ inputs.repo_owner }}
           flavor: |
             prefix=${{ matrix.arch }}-,onlatest=true
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.3.0
-      -
-        name: Install Cosign
-        uses: sigstore/cosign-installer@v3.5.0
       -
         name: Login to GitHub Container Registry
         uses: docker/login-action@v3.1.0
@@ -153,6 +156,9 @@ jobs:
           registry: ghcr.io
           username: ${{ inputs.repo_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
       -
         name: Create image tags
         id: image_tags
