@@ -202,12 +202,14 @@ jobs:
           IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
           for i in "${IMAGES[@]}"; do
             i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
-            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-latest 2>&1 | grep docker-content-digest | cut -d' ' -f2) && \
+            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+            DIGEST="${DIGEST//[$'\t\r\n ']}"
             echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest with digest ${DIGEST}"
             cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
             cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-latest@${DIGEST}
           done
-          DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/latest 2>&1 | grep docker-content-digest | cut -d' ' -f2)
+          DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+          DIGEST="${DIGEST//[$'\t\r\n ']}"
           echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:latest with digest ${DIGEST}"
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
