@@ -196,19 +196,15 @@ jobs:
           fi
           for i in ${{ steps.image_tags.outputs.extra_images }}; do
             i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
-            echo "Signing ${MANIFESTIMAGE}:${i}-latest"
-            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i}-latest -f '{{ index .Id }}') && \
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-latest@${DIGEST}
-            echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}"
+            echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest"
+            docker pull ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}
             export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} -f '{{ index .Id }}') && \
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}@${DIGEST}
           done
-          echo "Signing ${MANIFESTIMAGE}:latest"
-          export DIGEST=$(docker inspect ${MANIFESTIMAGE}:latest -f '{{ index .Id }}') && \
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
-          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}"
+          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:latest"
+          docker pull ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}
           export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} -f '{{ index .Id }}') && \
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}@${DIGEST}
         env:
           EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
           MANIFESTIMAGE: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}
