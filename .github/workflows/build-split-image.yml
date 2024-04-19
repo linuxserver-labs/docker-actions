@@ -168,6 +168,7 @@ jobs:
           if [[ -n $AMD64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); AMD64="${{ matrix.registry }}/${AMD64}"; fi
           if [[ -n $ARM64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); ARM64="${{ matrix.registry }}/${ARM64}"; fi
           EXTRA_IMAGES=$(echo $AMD64 $ARM64 | tr ' ' ',')
+          echo "Extra images are: ${EXTRA_IMAGES}"
           FINAL_IMAGE=ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${TAG_NAME}
           echo "extra_images=${EXTRA_IMAGES}" >> $GITHUB_OUTPUT
           echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
@@ -186,22 +187,22 @@ jobs:
         name: Create manifest and sign image
         id: manifest_sign
         run: |
-          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "aarch64" ]]; then
-            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:aarch64-latest
-            docker buildx imagetools create -t  ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:aarch64-${EXT_RELEASE_TAG}
+          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:arm64v8-latest
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG}
           else
-            docker buildx imagetools create -t  ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
-            docker buildx imagetools create -t  ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
           fi
           for i in ${{ steps.image_tags.outputs.extra_images }}; do
-            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i##*-}-latest -f '{{ index .Id }}')
+            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i##*-}-latest -f '{{ index .Id }}') && \
             cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i##*-}-latest@${DIGEST}
-            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i##*-}-${EXT_RELEASE_TAG} -f '{{ index .Id }}')
+            export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i##*-}-${EXT_RELEASE_TAG} -f '{{ index .Id }}') && \
             cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i##*-}-${EXT_RELEASE_TAG}@${DIGEST}
           done
-          export DIGEST=$(docker inspect ${MANIFESTIMAGE}:latest -f '{{ index .Id }}')
+          export DIGEST=$(docker inspect ${MANIFESTIMAGE}:latest -f '{{ index .Id }}') && \
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
-          export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} -f '{{ index .Id }}')
+          export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} -f '{{ index .Id }}') && \
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
         env:
           EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
