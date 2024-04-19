@@ -194,10 +194,11 @@ jobs:
             docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
             docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
           fi
-          for i in ${{ steps.image_tags.outputs.extra_images }}; do
+          IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
+          for i in "${IMAGES[@]}"; do
             i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
             docker pull ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}
-            export DIGEST=$(docker buildx imagetools inspect --raw ${MANIFESTIMAGE}:arm64v8-latest | jq -r '.manifests[0].digest') && \
+            export DIGEST=$(docker buildx imagetools inspect --raw ${MANIFESTIMAGE}:${i}-latest | jq -r '.manifests[0].digest') && \
             echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest with digest ${DIGEST}"
             cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}@${DIGEST}
           done
