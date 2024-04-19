@@ -197,7 +197,6 @@ jobs:
           IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
           for i in "${IMAGES[@]}"; do
             i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
-            docker pull ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}
             export DIGEST=$(docker buildx imagetools inspect --raw ${MANIFESTIMAGE}:${i}-latest | jq -r '.manifests[0].digest') && \
             echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest with digest ${DIGEST}"
             cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}@${DIGEST}
