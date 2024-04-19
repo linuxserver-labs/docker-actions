@@ -187,17 +187,11 @@ jobs:
         id: manifest_sign
         run: |
           if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "aarch64" ]]; then
-            docker manifest create ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:aarch64-latest
-            docker manifest annotate ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:aarch64-latest --os linux --arch arm64 --variant v8
-            docker manifest push ${MANIFESTIMAGE}:latest
-            docker manifest create ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:aarch64-${EXT_RELEASE_TAG}
-            docker manifest annotate ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:aarch64-${EXT_RELEASE_TAG} --os linux --arch arm64 --variant v8
-            docker manifest push ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:aarch64-latest
+            docker buildx imagetools create -t  ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:aarch64-${EXT_RELEASE_TAG}
           else
-            docker manifest create ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
-            docker manifest push ${MANIFESTIMAGE}:latest
-            docker manifest create ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
-            docker manifest push ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}
+            docker buildx imagetools create -t  ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
+            docker buildx imagetools create -t  ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
           fi
           for i in ${{ steps.image_tags.outputs.extra_images }}; do
             export DIGEST=$(docker inspect ${MANIFESTIMAGE}:${i##*-}-latest -f '{{ index .Id }}')
