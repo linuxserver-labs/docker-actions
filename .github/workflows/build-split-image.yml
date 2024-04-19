@@ -49,6 +49,8 @@ jobs:
             org.opencontainers.image.title=${{ inputs.app_name }}
             org.opencontainers.image.description=${{ inputs.app_name }}
             org.opencontainers.image.vendor=${{ inputs.repo_owner }}
+          flavor: |
+            prefix=${{ matrix.arch }}-
           tags: |
             type=schedule
             type=ref,event=branch
