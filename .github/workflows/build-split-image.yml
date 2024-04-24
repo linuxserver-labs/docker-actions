@@ -22,7 +22,7 @@ on:
         required: false
         type: string
     secrets:
-      scarf_token:
+      OP_SERVICE_ACCOUNT_TOKEN:
         required: true
 
 jobs:
@@ -34,12 +34,11 @@ jobs:
     outputs:
       meta-amd64: ${{ steps.dump_tags.outputs.meta-amd64 }}
       meta-arm64v8: ${{ steps.dump_tags.outputs.meta-arm64v8 }}
-      meta-arm32v7: ${{ steps.dump_tags.outputs.meta-arm32v7 }}
     steps:
       -
         name: Checkout
         uses: actions/checkout@v4
-      -  
+      -
         name: Docker meta
         id: docker_meta
         uses: docker/metadata-action@v5.5.1
@@ -51,7 +50,13 @@ jobs:
             org.opencontainers.image.description=${{ inputs.app_name }}
             org.opencontainers.image.vendor=${{ inputs.repo_owner }}
           flavor: |
-            prefix=${{ matrix.arch }}-,onlatest=true
+            prefix=${{ matrix.arch }}-
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -65,14 +70,14 @@ jobs:
           registry: ghcr.io
           username: ${{ inputs.repo_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - 
+      -
         name: Generate build date
         id: gen_date
         run: |
           BUILD_DATE=$(date '+%Y-%m-%dT%H:%M:%S%:z')
           echo "**** Setting build date to $BUILD_DATE ****"
           echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
-      - 
+      -
         name: Generate release version
         id: gen_release
         run: |
@@ -120,6 +125,7 @@ jobs:
           targets: ${{ matrix.arch }}
           push: true
           provenance: false
+          sbom: true
       -
         name: Dump Tags
         id: dump_tags
@@ -144,42 +150,72 @@ jobs:
           password: ${{ secrets.dockerhub_password }}
       -
         name: Login to GitHub Container Registry
-        if: matrix.registry == 'ghcr.io'        
+        if: matrix.registry == 'ghcr.io'
         uses: docker/login-action@v3.1.0
         with:
           registry: ghcr.io
           username: ${{ inputs.repo_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       -
+        name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+      -
         name: Create image tags
         id: image_tags
         run: |
           AMD64=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d '/')
           ARM64=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d '/')
-          ARM32=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d '/')
-          if [[ -n $AMD64 ]];then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); AMD64="${{ matrix.registry }}/${AMD64}"; fi
+          if [[ -n $AMD64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); AMD64="${{ matrix.registry }}/${AMD64}"; fi
           if [[ -n $ARM64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); ARM64="${{ matrix.registry }}/${ARM64}"; fi
-          if [[ -n $ARM32 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm32v7 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); ARM32="${{ matrix.registry }}/${ARM32}"; fi
-          EXTRA_IMAGES=$(echo $AMD64 $ARM64 $ARM32 | tr ' ' ',')
+          EXTRA_IMAGES=$(echo $AMD64 $ARM64 | tr ' ' ',')
+          echo "Extra images are: ${EXTRA_IMAGES}"
           FINAL_IMAGE=ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${TAG_NAME}
           echo "extra_images=${EXTRA_IMAGES}" >> $GITHUB_OUTPUT
           echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
           echo "final_image=${FINAL_IMAGE}" >> $GITHUB_OUTPUT
-      - 
-        name: Create and push manifest for tag
-        uses: Noelware/docker-manifest-action@0.4.1
+      -
+        name: Load Key
+        id: op-load-key
+        uses: 1password/load-secrets-action@v2
         with:
-          base-image: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${{ steps.image_tags.outputs.tag_name }}
-          extra-images: ${{ steps.image_tags.outputs.extra_images }}
-          push: true          
-      - 
-        name: Create and push manifest for latest
-        if:  ${{ github.event.release.tag_name != '' }}
-        uses: Noelware/docker-manifest-action@0.4.1
-        with:
-          base-image: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}:latest
-          extra-images: ${{ steps.image_tags.outputs.extra_images }}
-          push: true
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          COSIGN_PRIVATE_KEY: op://Labs/labs-sigstore-key/notesPlain
+          COSIGN_PASSWORD: op://Labs/labs-sigstore-pass/password
+      -
+        name: Create manifest and sign image
+        id: manifest_sign
+        run: |
+          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:arm64v8-latest
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG}
+          else
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
+          fi
+          case "${{ matrix.registry }}" in
+            "ghcr.io") AUTH_URL="https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull"; REGISTRY="ghcr.io";;
+            "docker.io") AUTH_URL="https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ inputs.repo_owner }}/${{ inputs.app_name }}:pull"; REGISTRY="registry-1.docker.io";;
+          esac
+          TOKEN="$(curl -s -f --retry 10 --retry-max-time 60 --retry-connrefused "${AUTH_URL}" | jq -r '.token')"
+          IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
+          for i in "${IMAGES[@]}"; do
+            i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
+            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+            DIGEST="${DIGEST//[$'\t\r\n ']}"
+            echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest with digest ${DIGEST}"
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-latest@${DIGEST}
+          done
+          DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+          DIGEST="${DIGEST//[$'\t\r\n ']}"
+          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:latest with digest ${DIGEST}"
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
+        env:
+          EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
+          MANIFESTIMAGE: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}
 
   finally:
     runs-on: ubuntu-latest
@@ -195,15 +231,3 @@ jobs:
         with:
           image: ${{ needs.manifest.outputs.final-image }}
           dockerfile: ./Dockerfile
-      -
-        name: Push to Scarf
-        id: push_scarf
-        run: |
-          PACKAGE_UUID=$(curl -s -H "Authorization: Bearer ${{ secrets.scarf_token }}" https://scarf.sh/api/v1/organizations/linuxserver-ci/packages | jq -r '.[] | select(.name=="${{ inputs.repo_owner }}/${{ inputs.app_name }}") | .uuid')
-          if [ -z "${PACKAGE_UUID}" ]; then
-            echo "Adding package to Scarf.sh"
-            curl -sX POST https://scarf.sh/api/v1/organizations/linuxserver-ci/packages -H "Authorization: Bearer ${{ secrets.scarf_token }}" -H "Content-Type: application/json" \
-              -d '{"name":"${{ inputs.repo_owner }}/${{ inputs.app_name }}","shortDescription":"example description","libraryType":"docker","website":"https://github.com/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}","backendUrl":"https://ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}","publicUrl":"https://lscr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}"}'
-          else
-            echo "Package already exists on Scarf.sh"
-          fi
