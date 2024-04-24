@@ -39,129 +39,132 @@ jobs:
       app_name: ${{ steps.build_check.outputs.app_name }}
       prerelease: ${{ steps.build_check.outputs.prerelease }}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Check if we should release
+        id: build_check
+        run: |
+          echo "**** Retrieving external version ****"
+          case ${{ inputs.release_type }} in
+            github)
+              EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
+              ;;
+            github_tag)
+              EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+              ;;
+            github_commit)
+              EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[])' | cut -c1-8);
+              ;;
+            alpine)
+              EXT_RELEASE=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
+              ;;
+            script)
+              if test -f "./get-version.sh"; then
+                EXT_RELEASE=$(bash "./get-version.sh");
+              fi
+              ;;
+          esac
+          if [ -z "${EXT_RELEASE}" ] || [ "${EXT_RELEASE}" == "null" ]; then
+            echo "**** Can't retrieve external version, exiting ****"
+            exit 1
+          fi
 
-    - name: Check if we should release
-      id: build_check
-      run: |
-        echo "**** Retrieving external version ****"
-        case ${{ inputs.release_type }} in
-          github)
-            EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
-            ;;
-          github_commit)
-            EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[])' | cut -c1-8);
-            ;;
-          github_tag)
-            EXT_RELEASE=$(curl -sL "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
-            ;;
-          alpine)
-            EXT_RELEASE=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
-            ;;
-          script)
-            if test -f "./get-version.sh"; then
-              EXT_RELEASE=$(bash "./get-version.sh");
-            fi
-            ;;
-        esac
-        if [ -z "${EXT_RELEASE}" ] || [ "${EXT_RELEASE}" == "null" ]; then
-          echo "**** Can't retrieve external version, exiting ****"
-          exit 1
-        fi
+          EXT_RELEASE=$(echo ${EXT_RELEASE} | sed 's/[~,%@+;:/]//g')
 
-        EXT_RELEASE=$(echo ${EXT_RELEASE} | sed 's/[~,%@+;:/]//g')
+          echo "**** External version: ${EXT_RELEASE} ****"
+          echo "**** Retrieving last pushed version ****"
 
-        echo "**** External version: ${EXT_RELEASE} ****"
-        echo "**** Retrieving last pushed version ****"
-
-        IMAGE="${{ inputs.repo_owner }}/${{ inputs.app_name }}"
-        TAG="latest"
-        TOKEN=$(curl -s \
-          "https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull" \
-          | jq -r '.[]')
-        if [ "${TOKEN:0:1}" == "[" ]; then
-          IMAGE_VERSION="null"
-          LS_VERSION="ls1"
-        else
-          MULTIDIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
+          IMAGE="${{ inputs.repo_owner }}/${{ inputs.app_name }}"
+          TAG="latest"
+          TOKEN=$(curl -s \
+            "https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull" \
+            | jq -r '.[]')
+          if [ "${TOKEN:0:1}" == "[" ]; then
+            IMAGE_VERSION="null"
+            LS_VERSION="ls1"
+          else
+            MULTIDIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
             --silent \
             --location \
             --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
             --header "Accept: application/vnd.oci.image.index.v1+json" \
             --header "Authorization: Bearer ${TOKEN}" \
-            "https://ghcr.io/v2/${IMAGE}/manifests/${TAG}" | jq -r 'first(.manifests[].digest)?')
-          if [[ -z "${MULTIDIGEST}" ]]; then
-            if DIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
-              --silent \
-              --location \
-              --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-              --header "Accept: application/vnd.oci.image.manifest.v1+json" \
-              --header "Authorization: Bearer ${TOKEN}" \
-              "https://ghcr.io/v2/${IMAGE}/manifests/${TAG}"); then
-              if jq -e . >/dev/null 2>&1 <<<"$DIGEST"; then
-                DIGEST=$(echo "${DIGEST}" | jq -r '.config.digest');
+            "https://ghcr.io/v2/${IMAGE}/manifests/${TAG}")
+            if jq -e '.layers // empty' <<< "${MULTIDIGEST}" >/dev/null 2>&1; then
+              # If there's a layer element it's a single-arch manifest so just get that digest
+              DIGEST=$(jq -r '.layers[0].digest' <<< "${MULTIDIGEST}")
+            else
+              # Otherwise it's multi-arch or has manifest annotations
+              if jq -e '.manifests[]?.annotations // empty' <<< "${MULTIDIGEST}" >/dev/null 2>&1; then
+                # Check for manifest annotations and delete if found
+                echo "Mod has one or more manifest annotations" >&2
+                MULTIDIGEST=$(jq 'del(.manifests[] | select(.annotations))' <<< "${MULTIDIGEST}")
+              fi
+              if [[ $(jq '.manifests | length' <<< "${MULTIDIGEST}") -gt 1 ]]; then
+                # If there's still more than one digest, it's multi-arch
+                echo "Mod has a multi-arch manifest" >&2
+                MULTIDIGEST=$(jq -r ".manifests[] | select(.platform.architecture == \"amd64\").digest?" <<< "${MULTIDIGEST}")
               else
+                # Otherwise it's single arch
+                echo "Mod only has a single arch manifest" >&2
+                MULTIDIGEST=$(jq -r ".manifests[].digest?" <<< "${MULTIDIGEST}")
+              fi
+              if [[ -z "${MULTIDIGEST}" ]]; then
                 DIGEST="unknown"
+              else
+                if DIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
+                  --silent \
+                  --location \
+                  --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+                  --header "Accept: application/vnd.oci.image.manifest.v1+json" \
+                  --header "Authorization: Bearer ${TOKEN}" \
+                  "https://ghcr.io/v2/${IMAGE}/manifests/${MULTIDIGEST}"); then
+                  DIGEST=$(jq -r '.config.digest' <<< "${DIGEST}")
+                fi
               fi
             fi
-          else
-            if DIGEST=$(curl  -f --retry 10 --retry-max-time 60 --retry-connrefused \
-              --silent \
-              --location \
-              --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-              --header "Accept: application/vnd.oci.image.manifest.v1+json" \
-              --header "Authorization: Bearer ${TOKEN}" \
-              "https://ghcr.io/v2/${IMAGE}/manifests/${MULTIDIGEST}"); then
-              if jq -e . >/dev/null 2>&1 <<<"$DIGEST"; then
-                DIGEST=$(echo "${DIGEST}" | jq -r '.config.digest');
-              else
-                DIGEST="unknown"
-              fi
+            if [[ -z "${DIGEST}" ]] || [[ "${DIGEST}" == "null" ]]; then
+              echo "**** Package exists but can't find image tagged latest, releasing ****"
+              IMAGE_VERSION="null"
+            elif [[ "${DIGEST}" == "unknown" ]]; then
+              echo "**** Package exists but something is wrong with the manifest, using last release instead ****"
+              LAST_RELEASE=$(curl -sL "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | awk '/tag_name/{print $4;exit}' FS='[""]')
+              IMAGE_VERSION=$(echo ${LAST_RELEASE} | awk -F'-spad' '{print $1}')
+            else
+              IMAGE_INFO=$(curl -sL \
+                --header "Authorization: Bearer ${TOKEN}" \
+                "https://ghcr.io/v2/${IMAGE}/blobs/${DIGEST}" \
+                | jq -r '.config')
+              IMAGE_RELEASE=$(echo ${IMAGE_INFO} | jq -r '.Labels."org.opencontainers.image.version"')
+              IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
+              LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
+              LS_VERSION="ls$(( $LS_VERSION+1 ))"
             fi
           fi
-          if [[ -z "${DIGEST}" ]] || [[ "${DIGEST}" == "null" ]]; then
-            echo "**** Package exists but can't find image tagged latest, releasing ****"
-            IMAGE_VERSION="null"
-            LS_VERSION="ls1"
-          elif [[ "${DIGEST}" == "unknown" ]]; then
-            echo "**** Package exists but something is wrong with the manifest, using last release instead ****"
-            LAST_RELEASE=$(curl -sL "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | awk '/tag_name/{print $4;exit}' FS='[""]')
-            IMAGE_VERSION=$(echo ${LAST_RELEASE} | awk -F'-ls' '{print $1}')
-            LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
-          else
-            IMAGE_INFO=$(curl -sL \
-              --header "Authorization: Bearer ${TOKEN}" \
-              "https://ghcr.io/v2/${IMAGE}/blobs/${DIGEST}" \
-              | jq -r '.config')
-            IMAGE_RELEASE=$(echo ${IMAGE_INFO} | jq -r '.Labels."org.opencontainers.image.version"')
-            IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
-            LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
-            LS_VERSION="ls$(( $LS_VERSION+1 ))"
+
+          echo "**** Last pushed version: ${IMAGE_VERSION} ****"
+
+          if [ "${EXT_RELEASE}" == "${IMAGE_VERSION}" ]; then
+            echo "**** Version ${EXT_RELEASE} already pushed, not releasing ****"
+            echo "update_available=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
-        fi
 
-        echo "**** Last pushed version: ${IMAGE_VERSION} ****"
+          echo "**** Version ${EXT_RELEASE} has not been pushed, releasing ****"
+          echo "**** LS_VERSION set to $LS_VERSION ****"
+          echo "update_available=true" >> $GITHUB_OUTPUT
+          IMAGE_RELEASE=${EXT_RELEASE}
+          echo "image_release=${IMAGE_RELEASE}" >> $GITHUB_OUTPUT
+          echo "ls_version=${LS_VERSION}" >> $GITHUB_OUTPUT
+          echo "app_name=${{ inputs.app_name }}" >> $GITHUB_OUTPUT
 
-        if [ "${EXT_RELEASE}" == "${IMAGE_VERSION}" ]; then
-          echo "**** Version ${EXT_RELEASE} already pushed, not releasing ****"
-          echo "update_available=false" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-
-        echo "**** Version ${EXT_RELEASE} has not been pushed, releasing ****"
-        echo "**** LS_VERSION set to $LS_VERSION ****"
-        echo "update_available=true" >> $GITHUB_OUTPUT
-        IMAGE_RELEASE=${EXT_RELEASE}
-        echo "image_release=${IMAGE_RELEASE}" >> $GITHUB_OUTPUT
-        echo "ls_version=${LS_VERSION}" >> $GITHUB_OUTPUT
-        echo "app_name=${{ inputs.app_name }}" >> $GITHUB_OUTPUT
-
-        if ${{ inputs.prerelease }} == 'true'; then
-          echo "prerelease=true" >> $GITHUB_OUTPUT
-        else
-          echo "prerelease=false" >> $GITHUB_OUTPUT
-        fi
+          if ${{ inputs.prerelease }} == 'true'; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
 
   release:
     runs-on: ubuntu-latest
