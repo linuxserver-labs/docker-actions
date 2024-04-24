@@ -37,15 +37,15 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/.github/workflows/build-image.yml@v6
+    uses: linuxserver-labs/docker-actions/.github/workflows/build-image.yml@v7
     with:
       repo_owner: ${{ github.repository_owner }}
       app_name: "your_spotify"
       release_type: "github"
       release_url: "https://api.github.com/repos/Yooooomi/your_spotify"
-      target-arch: all
+      target-arch: "64"
     secrets:
-      scarf_token: ${{ secrets.SCARF_TOKEN }}
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 ```
 
 ### build-split-image.yml
@@ -62,7 +62,7 @@ This workflow will build a Docker image on release or on a PR being opened. It i
 
 `app_name` is a mandatory input and should be the desired name of the image and consistent across all workflows.
 
-`target-arch` is mandatory and should be an array of one or more of `amd64`, `arm64v8`, `arm32v7`
+`target-arch` is mandatory and should be an array of one or more of `amd64`, `arm64v8`
 
 Example workflow:
 
@@ -76,15 +76,15 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/workflows/build-split-image.yml@v6
+    uses: linuxserver-labs/docker-actions/workflows/build-split-image.yml@v7
     with:
       repo_owner: ${{ github.repository_owner }}
       app_name: "radarr"
       release_type: "script"
       target-arch: >-
-        ["amd64", "arm64v8", "arm32v7"]
+        ["amd64", "arm64v8"]
     secrets:
-      scarf_token: ${{ secrets.SCARF_TOKEN }}
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 ```
 
 ### check-and-release.yml
@@ -117,7 +117,7 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/.github/workflows/check-and-release.yml@v6
+    uses: linuxserver-labs/docker-actions/.github/workflows/check-and-release.yml@v7
     with:
       repo_owner: ${{ github.repository_owner }}
       app_name: "radarr"
@@ -151,12 +151,12 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/.github/workflows/check-baseimage-update.yml@v6
+    uses: linuxserver-labs/docker-actions/.github/workflows/check-baseimage-update.yml@v7
     with:
       repo_owner: ${{ github.repository_owner }}
       baseimage: "alpine"
-      basebranch: "3.15"
-      app_name: "whisparr"
+      basebranch: "3.19"
+      app_name: "radarr"
       branch: nightly
     secrets:
       repo_release_token: ${{ secrets.repo_release_token }}
