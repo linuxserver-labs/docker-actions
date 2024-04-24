@@ -184,7 +184,8 @@ jobs:
           COSIGN_PRIVATE_KEY: op://Labs/labs-sigstore-key/notesPlain
           COSIGN_PASSWORD: op://Labs/labs-sigstore-pass/password
       -
-        name: Create manifest and sign image
+        name: Create manifest and sign image for release
+        if: ${{ github.event_name != 'pull_request' }}
         id: manifest_sign
         run: |
           if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
@@ -213,6 +214,36 @@ jobs:
           echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:latest with digest ${DIGEST}"
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
+        env:
+          EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
+          MANIFESTIMAGE: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}
+      -
+        name: Create manifest and sign image for PRs
+        if: ${{ github.event_name == 'pull_request' }}
+        id: manifest_sign_pr
+        run: |
+          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG}
+          else
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
+          fi
+          case "${{ matrix.registry }}" in
+            "ghcr.io") AUTH_URL="https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull"; REGISTRY="ghcr.io";;
+            "docker.io") AUTH_URL="https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ inputs.repo_owner }}/${{ inputs.app_name }}:pull"; REGISTRY="registry-1.docker.io";;
+          esac
+          TOKEN="$(curl -s -f --retry 10 --retry-max-time 60 --retry-connrefused "${AUTH_URL}" | jq -r '.token')"
+          IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
+          for i in "${IMAGES[@]}"; do
+            i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
+            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-${EXT_RELEASE_TAG} 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+            DIGEST="${DIGEST//[$'\t\r\n ']}"
+            echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} with digest ${DIGEST}"
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
+          done
+          DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${EXT_RELEASE_TAG} 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+          DIGEST="${DIGEST//[$'\t\r\n ']}"
+          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} with digest ${DIGEST}"
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
         env:
           EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
           MANIFESTIMAGE: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}
