@@ -128,10 +128,12 @@ jobs:
             if [[ -z "${DIGEST}" ]] || [[ "${DIGEST}" == "null" ]]; then
               echo "**** Package exists but can't find image tagged latest, releasing ****"
               IMAGE_VERSION="null"
+              LS_VERSION="ls1"
             elif [[ "${DIGEST}" == "unknown" ]]; then
               echo "**** Package exists but something is wrong with the manifest, using last release instead ****"
               LAST_RELEASE=$(curl -sL "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | awk '/tag_name/{print $4;exit}' FS='[""]')
-              IMAGE_VERSION=$(echo ${LAST_RELEASE} | awk -F'-spad' '{print $1}')
+              IMAGE_VERSION=$(echo ${LAST_RELEASE} | awk -F'-ls' '{print $1}')
+              LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
             else
               IMAGE_INFO=$(curl -sL \
                 --header "Authorization: Bearer ${TOKEN}" \
