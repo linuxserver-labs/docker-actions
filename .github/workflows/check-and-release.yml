@@ -99,16 +99,16 @@ jobs:
               # Otherwise it's multi-arch or has manifest annotations
               if jq -e '.manifests[]?.annotations // empty' <<< "${MULTIDIGEST}" >/dev/null 2>&1; then
                 # Check for manifest annotations and delete if found
-                echo "Mod has one or more manifest annotations" >&2
+                echo "Image has one or more manifest annotations" >&2
                 MULTIDIGEST=$(jq 'del(.manifests[] | select(.annotations))' <<< "${MULTIDIGEST}")
               fi
               if [[ $(jq '.manifests | length' <<< "${MULTIDIGEST}") -gt 1 ]]; then
                 # If there's still more than one digest, it's multi-arch
-                echo "Mod has a multi-arch manifest" >&2
-                MULTIDIGEST=$(jq -r ".manifests[] | select(.platform.architecture == \"amd64\").digest?" <<< "${MULTIDIGEST}")
+                echo "Image has a multi-arch manifest" >&2
+                MULTIDIGEST=$(jq -r "[.manifests[] | select(.platform.os == \"linux\")][0].digest?" <<< "${MULTIDIGEST}")
               else
                 # Otherwise it's single arch
-                echo "Mod only has a single arch manifest" >&2
+                echo "Image only has a single arch manifest" >&2
                 MULTIDIGEST=$(jq -r ".manifests[].digest?" <<< "${MULTIDIGEST}")
               fi
               if [[ -z "${MULTIDIGEST}" ]]; then
