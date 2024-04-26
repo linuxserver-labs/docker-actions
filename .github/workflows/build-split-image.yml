@@ -50,7 +50,7 @@ jobs:
             org.opencontainers.image.description=${{ inputs.app_name }}
             org.opencontainers.image.vendor=${{ inputs.repo_owner }}
           flavor: |
-            prefix=${{ matrix.arch }}-
+            prefix=${{ matrix.arch }}-,onlatest=true
           tags: |
             type=schedule
             type=ref,event=branch
@@ -82,17 +82,17 @@ jobs:
         id: gen_release
         run: |
           if [ -z ${{ github.event.release.tag_name }} ]; then
-            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r '(.[0].tag_name)?')
+            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r '(sort_by(.published_at) | .[-1].tag_name)?')
             if [ -z $IMAGE_VERSION ] || [ $IMAGE_VERSION == null ]; then
               case ${{ inputs.release_type }} in
                 github)
                   IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
                   ;;
-                github_commit)
-                  IMAGE_VERSION=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[])' | cut -c1-8);
-                  ;;
                 github_tag)
                   IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
+                  ;;
+                github_commit)
+                  IMAGE_VERSION=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[])' | cut -c1-8);
                   ;;
                 alpine)
                   IMAGE_VERSION=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
