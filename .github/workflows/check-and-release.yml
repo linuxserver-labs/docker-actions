@@ -143,6 +143,7 @@ jobs:
                 | jq -r '.config')
               IMAGE_RELEASE=$(echo ${IMAGE_INFO} | jq -r '.Labels."org.opencontainers.image.version"')
               IMAGE_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $1}')
+              IMAGE_VERSION=$(sed 's/[a-z][a-z][a-z]64-//' <<< ${IMAGE_VERSION})
               LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
               LS_VERSION="ls$(( $LS_VERSION+1 ))"
             fi
