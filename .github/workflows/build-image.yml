@@ -28,6 +28,7 @@ on:
 jobs:
   bake:
     runs-on: ubuntu-latest
+    if: ${{ github.actor != 'dependabot[bot]' }}
     steps:
       -
         name: Checkout
