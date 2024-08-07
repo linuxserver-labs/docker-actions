@@ -110,7 +110,7 @@ jobs:
       -
         name: Build and push
         id: build_push
-        uses: docker/bake-action@v5.5.0
+        uses: docker/bake-action@v5.6.0
         with:
           files: |
             ./docker-bake.hcl
