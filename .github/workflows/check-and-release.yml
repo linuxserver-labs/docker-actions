@@ -31,7 +31,7 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       image_release: ${{ steps.build_check.outputs.image_release }}
       ls_version: ${{ steps.build_check.outputs.ls_version }}
@@ -172,7 +172,7 @@ jobs:
           fi
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: check
     if:  ${{ needs.check.outputs.update_available == 'true' }}
     steps:
