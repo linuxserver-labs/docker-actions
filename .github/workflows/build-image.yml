@@ -135,7 +135,7 @@ jobs:
       -
         name: Load Key
         id: op-load-key
-        uses: 1password/load-secrets-action@v2
+        uses: 1password/load-secrets-action@v3
         with:
           export-env: true
         env:
