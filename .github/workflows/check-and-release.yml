@@ -41,7 +41,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Check if we should release
         id: build_check
@@ -178,7 +178,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Generate release tag
         id: gen_tags
