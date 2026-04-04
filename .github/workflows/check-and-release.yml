@@ -21,7 +21,7 @@ on:
       prerelease:
         required: false
         type: boolean
-      branch:
+      branch_name:
         required: false
         type: string
         default: main
@@ -42,6 +42,8 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch_name }}
       -
         name: Check if we should release
         id: build_check
@@ -77,7 +79,7 @@ jobs:
           echo "**** Retrieving last pushed version ****"
 
           IMAGE="${{ inputs.repo_owner }}/${{ inputs.app_name }}"
-          TAG="latest"
+          TAG="${{ inputs.branch_name }}"
           TOKEN=$(curl -s \
             "https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull" \
             | jq -r '.[]')
@@ -133,7 +135,7 @@ jobs:
               LS_VERSION="ls1"
             elif [[ "${DIGEST}" == "unknown" ]]; then
               echo "**** Package exists but something is wrong with the manifest, using last release instead ****"
-              LAST_RELEASE=$(curl -sL "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | awk '/tag_name/{print $4;exit}' FS='[""]')
+              LAST_RELEASE=$(curl -sL "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r 'last((sort_by(.published_at) | .[] | select(.target_commitish == "${{ inputs.branch_name }}") | .tag_name))')
               IMAGE_VERSION=$(echo ${LAST_RELEASE} | awk -F'-ls' '{print $1}')
               LS_VERSION=$(echo ${IMAGE_RELEASE} | awk -F'-ls' '{print $2}')
             else
@@ -179,6 +181,8 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch_name }}
       -
         name: Generate release tag
         id: gen_tags
@@ -194,4 +198,4 @@ jobs:
           token: ${{ secrets.repo_release_token }}
           tag_name: ${{ steps.gen_tags.outputs.tag_name }}
           prerelease: ${{ needs.check.outputs.prerelease }}
-          target_commitish: ${{ inputs.branch }}
+          target_commitish: ${{ inputs.branch_name }}
