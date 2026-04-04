@@ -160,6 +160,13 @@ jobs:
       final-image: ${{ steps.image_tags.outputs.final_image }}
     steps:
       -
+        name: Login to DockerHub
+        if: matrix.registry == 'docker.io'
+        uses: docker/login-action@v3.6.0
+        with:
+          username: ${{ inputs.dockerhub_user }}
+          password: ${{ secrets.dockerhub_password }}
+      -
         name: Login to GitHub Container Registry
         if: matrix.registry == 'ghcr.io'
         uses: docker/login-action@v4.1.0
