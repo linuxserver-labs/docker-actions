@@ -176,7 +176,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Install Cosign
-        if: ${{ inputs.sign_image == 'true' }}
+        if: ${{ inputs.sign_image == true }}
         uses: sigstore/cosign-installer@v4.1.1
       -
         name: Create image tags
@@ -197,7 +197,7 @@ jobs:
       -
         name: Load Key
         id: op-load-key
-        if: ${{ inputs.sign_image == 'true' }}
+        if: ${{ inputs.sign_image == true }}
         uses: 1password/load-secrets-action@v4.0.0
         with:
           export-env: true
