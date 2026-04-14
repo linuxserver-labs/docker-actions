@@ -25,6 +25,10 @@ This workflow will build a Docker image on release or on a PR being opened. It i
 
 `target-arch` is mandatory and can be one of `all`, `amd64`, `arm`, `64`
 
+`sign_image` is an optional boolean for whether or not to sign the resultant image (default `true`)
+
+`branch_name` is optional and should be the name of the branch being built from (default `main`)
+
 Example workflow:
 
 ```yaml
@@ -37,13 +41,15 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/.github/workflows/build-image.yml@v7
+    uses: linuxserver-labs/docker-actions/.github/workflows/build-image.yml@v8
     with:
       repo_owner: ${{ github.repository_owner }}
       app_name: "your_spotify"
       release_type: "github"
       release_url: "https://api.github.com/repos/Yooooomi/your_spotify"
       target-arch: "64"
+      sign_image: true
+      branch_name: main
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 ```
@@ -62,7 +68,11 @@ This workflow will build a Docker image on release or on a PR being opened. It i
 
 `app_name` is a mandatory input and should be the desired name of the image and consistent across all workflows.
 
-`target-arch` is mandatory and should be an array of one or more of `amd64`, `arm64v8`
+`target-arch` is mandatory and should be an array of one or more of `amd64`, `arm64v8`, `risvc64`
+
+`sign_image` is an optional boolean for whether or not to sign the resultant image (default `true`)
+
+`branch_name` is optional and should be the name of the branch being built from (default `main`)
 
 Example workflow:
 
@@ -76,13 +86,15 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/workflows/build-split-image.yml@v7
+    uses: linuxserver-labs/docker-actions/workflows/build-split-image.yml@v8
     with:
       repo_owner: ${{ github.repository_owner }}
       app_name: "radarr"
       release_type: "script"
       target-arch: >-
         ["amd64", "arm64v8"]
+      sign_image: true
+      branch_name: main
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 ```
@@ -103,7 +115,7 @@ This workflow will check for updates to the upstream application and generate a 
 
 `prerelease` is an optional input and will cause all releases to be marked as prerelease.
 
-`branch` is an optional input and will cause all releases to be targeted against that branch. Defaults to `main` so needs to be specified if your default branch is `master`
+`branch_name` is optional and will cause all releases to be targeted against that branch (default `main`).
 
 Example workflow:
 
@@ -117,13 +129,13 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/.github/workflows/check-and-release.yml@v7
+    uses: linuxserver-labs/docker-actions/.github/workflows/check-and-release.yml@v8
     with:
       repo_owner: ${{ github.repository_owner }}
       app_name: "radarr"
       release_type: "script"
       prerelease: true
-      branch: nightly
+      branch_name: nightly
     secrets:
       repo_release_token: ${{ secrets.repo_release_token }}
 ```
@@ -138,7 +150,7 @@ This workflow will check for updates to the base image used by the repo and gene
 
 `basebranch` is a mandatory input and should be the release tag of the base image you're using. e.g. if you're using the focal tag of the Ubuntu baseimage then the `basebranch` should be `focal`.
 
-`branch` is an optional input and will cause all releases to be targeted against that branch. Defaults to `main` so needs to be specified if your default branch is `master`
+`branch_name` is optional and will cause all releases to be targeted against that branch (default `main`).
 
 Example workflow:
 
@@ -151,13 +163,13 @@ on:
 
 jobs:
   call-workflow:
-    uses: linuxserver-labs/docker-actions/.github/workflows/check-baseimage-update.yml@v7
+    uses: linuxserver-labs/docker-actions/.github/workflows/check-baseimage-update.yml@v8
     with:
       repo_owner: ${{ github.repository_owner }}
       baseimage: "alpine"
       basebranch: "3.19"
       app_name: "radarr"
-      branch: nightly
+      branch_name: nightly
     secrets:
       repo_release_token: ${{ secrets.repo_release_token }}
 ```

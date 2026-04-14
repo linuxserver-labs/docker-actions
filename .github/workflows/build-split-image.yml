@@ -21,6 +21,14 @@ on:
       release_name:
         required: false
         type: string
+      sign_image:
+        required: false
+        type: boolean
+        default: true
+      branch_name:
+        required: false
+        type: string
+        default: "main"
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN:
         required: true
@@ -35,14 +43,18 @@ jobs:
     outputs:
       meta-amd64: ${{ steps.dump_tags.outputs.meta-amd64 }}
       meta-arm64v8: ${{ steps.dump_tags.outputs.meta-arm64v8 }}
+      meta-riscv64: ${{ steps.dump_tags.outputs.meta-riscv64 }}
+      app_version: ${{ steps.gen_release.outputs.app_version }}
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.head_ref || inputs.branch_name }}
       -
         name: Docker meta
         id: docker_meta
-        uses: docker/metadata-action@v5.10.0
+        uses: docker/metadata-action@v6.0.0
         with:
           images: |
             ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}
@@ -50,23 +62,24 @@ jobs:
             org.opencontainers.image.title=${{ inputs.app_name }}
             org.opencontainers.image.description=${{ inputs.app_name }}
             org.opencontainers.image.vendor=${{ inputs.repo_owner }}
+            org.opencontainers.image.documentation=https://github.com/linuxserver-labs/${{ inputs.app_name }}
           flavor: |
+            latest=false
             prefix=${{ matrix.arch }}-,onlatest=true
           tags: |
-            type=schedule
             type=ref,event=branch
             type=ref,event=tag
             type=ref,event=pr,prefix=${{ matrix.arch }}-pr-,enable=true,priority=600
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,prefix=${{ matrix.arch }}-,value=${{ github.head_ref || inputs.branch_name }},enable=true
       -
         name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@v4.0.0
       -
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.12.0
+        uses: docker/setup-buildx-action@v4.0.0
       -
         name: Login to GitHub Container Registry
-        uses: docker/login-action@v3.6.0
+        uses: docker/login-action@v4.1.0
         with:
           registry: ghcr.io
           username: ${{ inputs.repo_owner }}
@@ -83,17 +96,17 @@ jobs:
         id: gen_release
         run: |
           if [ -z ${{ github.event.release.tag_name }} ]; then
-            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r '(sort_by(.published_at) | .[-1].tag_name)?')
-            if [ -z $IMAGE_VERSION ] || [ $IMAGE_VERSION == null ]; then
+            IMAGE_VERSION=$(curl -s "https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/releases" | jq -r 'last((sort_by(.published_at) | .[] | select(.target_commitish == "${{ inputs.branch_name }}") | .tag_name)?)')
+            if [ -z ${IMAGE_VERSION} ] || [ ${IMAGE_VERSION} == null ]; then
               case ${{ inputs.release_type }} in
                 github)
                   IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/releases/latest" | awk '/tag_name/{print $4;exit}' FS='[""]');
                   ;;
-                github_tag)
-                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
-                  ;;
                 github_commit)
                   IMAGE_VERSION=$(curl -sL "${{ inputs.release_url }}" | jq -r 'first(.[])' | cut -c1-8);
+                  ;;
+                github_tag)
+                  IMAGE_VERSION=$(curl -sX GET "${{ inputs.release_url }}/tags" | jq -r 'first(.[] | select(.name | contains("${{ inputs.release_name }}") )) | .name');
                   ;;
                 alpine)
                   IMAGE_VERSION=$(curl -sL "http://dl-cdn.alpinelinux.org/alpine/${{ inputs.release_url }}/x86_64/APKINDEX.tar.gz" | tar -xz -C /tmp && awk '/^P:'"${{ inputs.release_name }}"'$/,/V:/' /tmp/APKINDEX | sed -n 2p | sed 's/^V://');
@@ -114,8 +127,7 @@ jobs:
           echo "app_version=${APP_VERSION}" >> $GITHUB_OUTPUT
       -
         name: Build and push
-        id: build_push
-        uses: docker/bake-action@v6.10.0
+        uses: docker/bake-action@v7.0.0
         with:
           files: |
             ./docker-bake.hcl
@@ -131,6 +143,8 @@ jobs:
       -
         name: Dump Tags
         id: dump_tags
+        env:
+          JSON_OUTPUT: ${{ steps.docker_meta.outputs.json }}
         run: |
           echo "meta-${{ matrix.arch }}=${{ fromJSON(steps.docker_meta.outputs.json).tags[0] }}" >> $GITHUB_OUTPUT
 
@@ -147,30 +161,33 @@ jobs:
       -
         name: Login to DockerHub
         if: matrix.registry == 'docker.io'
-        uses: docker/login-action@v3.6.0
+        uses: docker/login-action@v4.1.0
         with:
           username: ${{ inputs.dockerhub_user }}
           password: ${{ secrets.dockerhub_password }}
       -
         name: Login to GitHub Container Registry
         if: matrix.registry == 'ghcr.io'
-        uses: docker/login-action@v3.6.0
+        uses: docker/login-action@v4.1.0
         with:
           registry: ghcr.io
           username: ${{ inputs.repo_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Install Cosign
-        uses: sigstore/cosign-installer@v3.10.0
+        if: ${{ inputs.sign_image == true }}
+        uses: sigstore/cosign-installer@v4.1.1
       -
         name: Create image tags
         id: image_tags
         run: |
           AMD64=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d '/')
           ARM64=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d '/')
+          RSICV64=$(echo ${{ needs.bake.outputs.meta-riscv64 }} | cut -f 2- -d '/')
           if [[ -n $AMD64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-amd64 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); AMD64="${{ matrix.registry }}/${AMD64}"; fi
           if [[ -n $ARM64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-arm64v8 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); ARM64="${{ matrix.registry }}/${ARM64}"; fi
-          EXTRA_IMAGES=$(echo $AMD64 $ARM64 | tr ' ' ',')
+          if [[ -n $RSICV64 ]]; then TAG_NAME=$(echo ${{ needs.bake.outputs.meta-riscv64 }} | cut -f 2- -d ':' | cut -f 2- -d '-'); RSICV64="${{ matrix.registry }}/${RSICV64}"; fi
+          EXTRA_IMAGES=$(echo $AMD64 $ARM64 $RSICV64 | tr ' ' ',')
           echo "Extra images are: ${EXTRA_IMAGES}"
           FINAL_IMAGE=ghcr.io/${{ inputs.repo_owner }}/${{ inputs.app_name }}:${TAG_NAME}
           echo "extra_images=${EXTRA_IMAGES}" >> $GITHUB_OUTPUT
@@ -179,7 +196,8 @@ jobs:
       -
         name: Load Key
         id: op-load-key
-        uses: 1password/load-secrets-action@v3
+        if: ${{ inputs.sign_image == true }}
+        uses: 1password/load-secrets-action@v4.0.0
         with:
           export-env: true
         env:
@@ -191,41 +209,64 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         id: manifest_sign
         run: |
-          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
-            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:arm64v8-latest
+          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "riscv64" ]]; then
+            if [[ ${{ github.event.repository.default_branch }} == ${{ inputs.branch_name }} ]]; then
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:riscv64-latest ${MANIFESTIMAGE}:riscv64-${EXT_RELEASE_TAG}
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:arm64v8-latest ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG}
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:arm64v8-latest ${MANIFESTIMAGE}:riscv64-latest
+            fi
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:riscv64-${EXT_RELEASE_TAG}
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${{ inputs.branch_name }} ${MANIFESTIMAGE}:amd64-${{ inputs.branch_name }} ${MANIFESTIMAGE}:arm64v8-${{ inputs.branch_name }} ${MANIFESTIMAGE}:riscv64-${{ inputs.branch_name }}
+          elif [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
+            if [[ ${{ github.event.repository.default_branch }} == ${{ inputs.branch_name }} ]]; then
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:arm64v8-latest ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG}
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:arm64v8-latest
+            fi
             docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG}
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${{ inputs.branch_name }} ${MANIFESTIMAGE}:amd64-${{ inputs.branch_name }} ${MANIFESTIMAGE}:arm64v8-${{ inputs.branch_name }}
           else
-            docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
+            if [[ ${{ github.event.repository.default_branch }} == ${{ inputs.branch_name }} ]]; then
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:amd64-latest ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
+              docker buildx imagetools create -t ${MANIFESTIMAGE}:latest ${MANIFESTIMAGE}:amd64-latest
+            fi
             docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${{ inputs.branch_name }} ${MANIFESTIMAGE}:amd64-${{ inputs.branch_name }}
           fi
           case "${{ matrix.registry }}" in
             "ghcr.io") AUTH_URL="https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull"; REGISTRY="ghcr.io";;
             "docker.io") AUTH_URL="https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ inputs.repo_owner }}/${{ inputs.app_name }}:pull"; REGISTRY="registry-1.docker.io";;
           esac
-          TOKEN="$(curl -s -f --retry 10 --retry-max-time 60 --retry-connrefused "${AUTH_URL}" | jq -r '.token')"
-          IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
-          for i in "${IMAGES[@]}"; do
-            i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
-            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+          if [[ ${SIGN_IMAGE} == "true" ]]; then
+            TOKEN="$(curl -s -f --retry 10 --retry-max-time 60 --retry-connrefused "${AUTH_URL}" | jq -r '.token')"
+            IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
+            for i in "${IMAGES[@]}"; do
+              i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
+              DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+              DIGEST="${DIGEST//[$'\t\r\n ']}"
+              echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest with digest ${DIGEST}"
+              cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
+              cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-latest@${DIGEST}
+            done
+            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
             DIGEST="${DIGEST//[$'\t\r\n ']}"
-            echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:${i}-latest with digest ${DIGEST}"
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-latest@${DIGEST}
-          done
-          DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/latest 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
-          DIGEST="${DIGEST//[$'\t\r\n ']}"
-          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:latest with digest ${DIGEST}"
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
+            echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} and ${MANIFESTIMAGE}:latest with digest ${DIGEST}"
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:latest@${DIGEST}
+          fi
         env:
           EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
           MANIFESTIMAGE: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}
+          SIGN_IMAGE: ${{ inputs.sign_image }}
       -
         name: Create manifest and sign image for PRs
         if: ${{ github.event_name == 'pull_request' }}
         id: manifest_sign_pr
         run: |
-          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
+          if [[ ${{ steps.image_tags.outputs.extra_images }} =~ "riscv64" ]]; then
+            docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:riscv64-${EXT_RELEASE_TAG}
+          elif [[ ${{ steps.image_tags.outputs.extra_images }} =~ "arm64v8" ]]; then
             docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:arm64v8-${EXT_RELEASE_TAG}
           else
             docker buildx imagetools create -t ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} ${MANIFESTIMAGE}:amd64-${EXT_RELEASE_TAG}
@@ -234,19 +275,66 @@ jobs:
             "ghcr.io") AUTH_URL="https://ghcr.io/token?scope=repository%3A${{ inputs.repo_owner }}%2F${{ inputs.app_name }}%3Apull"; REGISTRY="ghcr.io";;
             "docker.io") AUTH_URL="https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ inputs.repo_owner }}/${{ inputs.app_name }}:pull"; REGISTRY="registry-1.docker.io";;
           esac
-          TOKEN="$(curl -s -f --retry 10 --retry-max-time 60 --retry-connrefused "${AUTH_URL}" | jq -r '.token')"
-          IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
-          for i in "${IMAGES[@]}"; do
-            i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
-            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-${EXT_RELEASE_TAG} 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+          if [[ ${SIGN_IMAGE} == "true" ]]; then
+            TOKEN="$(curl -s -f --retry 10 --retry-max-time 60 --retry-connrefused "${AUTH_URL}" | jq -r '.token')"
+            IFS=',' read -r -a IMAGES <<< "${{ steps.image_tags.outputs.extra_images }}"
+            for i in "${IMAGES[@]}"; do
+              i=$(echo $i | cut -d":" -f2 | cut -d"-" -f1)
+              DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${i}-${EXT_RELEASE_TAG} 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
+              DIGEST="${DIGEST//[$'\t\r\n ']}"
+              echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} with digest ${DIGEST}"
+              cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
+            done
+            DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${EXT_RELEASE_TAG} 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
             DIGEST="${DIGEST//[$'\t\r\n ']}"
-            echo "Signing ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG} with digest ${DIGEST}"
-            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${i}-${EXT_RELEASE_TAG}@${DIGEST}
-          done
-          DIGEST=$(curl -s -L --retry 10 --retry-max-time 60 --retry-connrefused -I -H "Authorization: Bearer ${TOKEN}" --header "Accept: application/vnd.docker.distribution.manifest.v2+json" --header "Accept: application/vnd.oci.image.index.v1+json" https://${REGISTRY}/v2/${MANIFESTIMAGE}/manifests/${EXT_RELEASE_TAG} 2>&1 | grep 'docker-content-digest' | cut -d' ' -f2)
-          DIGEST="${DIGEST//[$'\t\r\n ']}"
-          echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} with digest ${DIGEST}"
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
+            echo "Signing ${MANIFESTIMAGE}:${EXT_RELEASE_TAG} with digest ${DIGEST}"
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${MANIFESTIMAGE}:${EXT_RELEASE_TAG}@${DIGEST}
+          fi
         env:
           EXT_RELEASE_TAG: ${{ steps.image_tags.outputs.tag_name }}
           MANIFESTIMAGE: ${{ matrix.registry }}/${{ inputs.repo_owner }}/${{ inputs.app_name }}
+          SIGN_IMAGE: ${{ inputs.sign_image }}
+
+  finally:
+    runs-on: ubuntu-latest
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    needs:
+      - bake
+      - manifest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.head_ref || inputs.branch_name }}
+      -
+        name: Commit release version
+        if: ${{ github.event_name != 'pull_request' }}
+        id: commit_release
+        env:
+          CI_COMMIT_MESSAGE: CI Build Workflow Updates
+        run: |
+          FILE_BASE64=$(base64 <<< "${{ needs.bake.outputs.app_version }}")
+          FILE_BLOB=$(curl -L \
+            -H "Accept: application/vnd.github.object" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/contents/version.txt?ref=${{ inputs.branch_name }})
+          if jq -re .sha <<< ${FILE_BLOB} 2> /dev/null; then
+            FILE_SHA=$(jq -r .sha <<< ${FILE_BLOB})
+            curl -L \
+              -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/contents/version.txt \
+              -d "{\"branch\":\"${{ inputs.branch_name }}\",\"sha\":\"${FILE_SHA}\",\"message\":\"${{ env.CI_COMMIT_MESSAGE }}\",\"content\":\"${FILE_BASE64}\"}"
+          else
+            curl -L \
+              -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/${{ inputs.repo_owner }}/docker-${{ inputs.app_name }}/contents/version.txt \
+              -d "{\"branch\":\"${{ inputs.branch_name }}\",\"message\":\"${{ env.CI_COMMIT_MESSAGE }}\",\"content\":\"${FILE_BASE64}\"}"
+          fi
