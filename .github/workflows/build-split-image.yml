@@ -71,7 +71,6 @@ jobs:
             type=ref,event=tag
             type=ref,event=pr,prefix=${{ matrix.arch }}-pr-,enable=true,priority=600
             type=raw,prefix=${{ matrix.arch }}-,value=${{ github.head_ref || inputs.branch_name }},enable=true
-            type=raw,prefix=${{ matrix.arch }}-,value=${{ github.head_ref || inputs.branch_name }},enable=true
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v4.0.0
