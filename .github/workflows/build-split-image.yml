@@ -176,7 +176,7 @@ jobs:
       -
         name: Install Cosign
         if: ${{ inputs.sign_image == true }}
-        uses: sigstore/cosign-installer@v4.1.1
+        uses: sigstore/cosign-installer@v4.1.2
       -
         name: Create image tags
         id: image_tags
