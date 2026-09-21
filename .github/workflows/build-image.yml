@@ -195,7 +195,7 @@ jobs:
         name: Load Key
         id: op-load-key
         if: ${{ inputs.sign_image == true }}
-        uses: 1password/load-secrets-action@v5.0.0
+        uses: 1password/load-secrets-action@5.0.1
         with:
           export-env: true
         env:
